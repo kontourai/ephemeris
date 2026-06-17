@@ -1,0 +1,47 @@
+{
+  "name": "@kontourai/ephemeris",
+  "version": "0.0.0",
+  "description": "External freshness scheduler / event-bridge for the Kontour suite. Turns time into a trigger.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "ephemeris": "dist/cli.js"
+  },
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "examples/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test tests/node/*.test.mjs",
+    "test:node": "node --test tests/node/*.test.mjs",
+    "example": "npm run build && node dist/../examples/demo.mjs"
+  },
+  "keywords": [
+    "scheduler",
+    "freshness",
+    "expiry",
+    "ttl",
+    "daemon",
+    "trustbundle",
+    "kontour"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "typescript": "^6.0.3"
+  }
+}
