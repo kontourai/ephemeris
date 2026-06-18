@@ -3,7 +3,8 @@
  * Minimal Ephemeris daemon entry point.
  *
  * Usage:
- *   ephemeris watch <bundleDir> [--store <path>] [--min-fire-interval <ms>]
+ *   ephemeris watch <bundleDir> [--store <path>] [--store-mode json|appendlog]
+ *                               [--compact-threshold <n>] [--min-fire-interval <ms>]
  *                               [--flow-mode programmatic|cli] [--flow-cmd <cmd>]
  *                               [--cwd <path>]
  *
@@ -18,7 +19,8 @@
  */
 import { EphemerisScheduler } from "./scheduler.js";
 import { SystemClock } from "./clock.js";
-import { JsonFileStore } from "./store.js";
+import { JsonFileStore, AppendLogStore } from "./store.js";
+import type { Store } from "./store.js";
 import {
   FlowEvaluateTrigger,
   programmaticFlowRunner,
@@ -36,6 +38,7 @@ async function main(): Promise<void> {
   if (command !== "watch" || !bundleDir) {
     console.error(
       "usage: ephemeris watch <bundleDir> [--store <path>] " +
+        "[--store-mode json|appendlog] [--compact-threshold <n>] " +
         "[--min-fire-interval <ms>] [--flow-mode programmatic|cli] " +
         "[--flow-cmd <cmd>] [--cwd <path>]",
     );
@@ -43,6 +46,8 @@ async function main(): Promise<void> {
   }
 
   const storePath = arg("store", ".ephemeris/wakeups.json")!;
+  const storeMode = arg("store-mode", "json")!;
+  const compactThreshold = Number(arg("compact-threshold", "1000"));
   const minFireIntervalMs = Number(arg("min-fire-interval", "0"));
   const flowMode = arg("flow-mode", "programmatic")!;
   const flowCmd = arg("flow-cmd", "flow")!;
@@ -53,9 +58,21 @@ async function main(): Promise<void> {
       ? cliFlowRunner(cwd ? { command: flowCmd, cwd } : { command: flowCmd })
       : programmaticFlowRunner(cwd ? { cwd } : {});
 
+  // Durability: `json` rewrites the whole file per mutation (simple default);
+  // `appendlog` appends one record per mutation and compacts past a threshold —
+  // for a larger watched-bundle count. Both survive restart identically.
+  const store: Store =
+    storeMode === "appendlog"
+      ? new AppendLogStore(storePath, {
+          compactThreshold: Number.isFinite(compactThreshold)
+            ? compactThreshold
+            : 1000,
+        })
+      : new JsonFileStore(storePath);
+
   const scheduler = new EphemerisScheduler({
     clock: new SystemClock(),
-    store: new JsonFileStore(storePath),
+    store,
     trigger: new FlowEvaluateTrigger({ runner }),
     minFireIntervalMs: Number.isFinite(minFireIntervalMs) ? minFireIntervalMs : 0,
   });
@@ -65,7 +82,7 @@ async function main(): Promise<void> {
   source.start();
 
   console.error(
-    `[ephemeris] watching ${bundleDir} (store=${storePath}, ` +
+    `[ephemeris] watching ${bundleDir} (store=${storePath} [${storeMode}], ` +
       `flow=${flowMode}, minFireInterval=${minFireIntervalMs}ms, ` +
       `pending=${scheduler.pendingCount()})`,
   );

@@ -27,10 +27,11 @@ export {
 
 // Store
 export type { Store } from "./store.js";
-export { InMemoryStore, JsonFileStore } from "./store.js";
+export { InMemoryStore, JsonFileStore, AppendLogStore } from "./store.js";
 
 // Sources
-export { DirectoryWatcherSource } from "./sources.js";
+export { DirectoryWatcherSource, RegistrySource } from "./sources.js";
+export type { SchedulerSink } from "./sources.js";
 
 // Read-model types (aligned to the published Hachure schema)
 export type {
