@@ -26,7 +26,8 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run build && node --test tests/node/*.test.mjs",
     "test:node": "node --test tests/node/*.test.mjs",
-    "example": "npm run build && node dist/../examples/demo.mjs"
+    "example": "npm run build && node dist/../examples/demo.mjs",
+    "prepack": "npm run build"
   },
   "keywords": [
     "scheduler",
@@ -47,5 +48,9 @@
   "dependencies": {
     "@kontourai/flow": "^1.4.0",
     "hachure": "^0.5.1"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }
