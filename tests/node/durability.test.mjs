@@ -13,8 +13,7 @@ import {
 
 function bundle() {
   return {
-    id: "bundle-1",
-    run: { id: "run-abc" },
+    source: "flow-run:my-flow:run-abc",
     claims: [{ id: "claim-1", expiresAt: new Date(5000).toISOString() }],
   };
 }
@@ -62,7 +61,7 @@ test("durability: fired history survives restart — no double-fire on reload", 
   const { path, dir } = tmpStorePath();
   try {
     const key = deadlineKey({
-      bundleId: "bundle-1",
+      bundleSource: "flow-run:my-flow:run-abc",
       claimId: "claim-1",
       fireAt: 5000,
     });

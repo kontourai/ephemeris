@@ -1,7 +1,7 @@
 # Ephemeris
 
 **External freshness scheduler / event-bridge for the Kontour suite.**
-Status: v0 skeleton · Layer: time actor.
+Status: v0.2 · Layer: time actor.
 
 > *Ephemeris* (n.) — in surveying/GNSS, a table of time-indexed positions that
 > has an age, goes stale, and must be refreshed. The name carries the
@@ -12,10 +12,12 @@ trigger**. It:
 
 1. **Ingests** Flow's emitted run-output TrustBundles and reads each referenced
    claim's `expiresAt` / `ttlSeconds` (Hachure freshness fields — **no new
-   schema**, it only reads them).
-2. **Arms** a durable timer per claim deadline (data-derived instants, not cron).
-3. **Fires** an idempotent trigger at the deadline — by default invokes Flow's
-   `evaluateRun` for the bundle's run.
+   schema**, it only reads them, validated against the published `hachure`
+   package's claim schema).
+2. **Arms** a durable timer per claim deadline (data-derived instants, not cron),
+   coalesced per claim so a flappy claim can't storm.
+3. **Fires** an idempotent, rate-limited trigger at the deadline — by default a
+   **programmatic** call to Flow's exported `evaluateRun(runId)`.
 
 That is its whole job. It owns the clock and durable wake-ups; it owns no trust
 or process authority.
@@ -61,24 +63,60 @@ trigger back into Flow's `evaluateRun`).
   authoritative state lives here; the only durable state is its own wake-up
   bookkeeping.
 
-## v0 architecture (decided defaults)
+## What changed in v0.2
+
+v0.2 turns three v0 scaffolds into real behavior, within a bounded increment:
+
+1. **Read-model aligned to the published Hachure schema** (`hachure@^0.5.1`).
+   The freshness fields Ephemeris reads now use Hachure's exact names/types and
+   are validated against the package's published `claim` schema at ingest.
+   Two schema realities are now honored in code:
+   - The Hachure `trust-bundle` schema has **no bundle-level `id`** — it forbids
+     one. A bundle is identified by its **`source`** string. So the read-model
+     keys on `source`, not a synthetic `bundle.id`.
+   - There is no `run` object on the bundle. Flow stamps the run-output bundle's
+     `source` as `flow-run:<definitionId>:<runId>`; Ephemeris derives the runId
+     it fires against from that (`runIdFromSource`), or the caller supplies one.
+2. **`FlowEvaluateTrigger` is real.** It invokes Flow's `evaluateRun` for the
+   bundle's run. The invocation is an injectable `FlowRunner`; the default
+   (`programmaticFlowRunner`) does a **programmatic dynamic import** of
+   `@kontourai/flow` and calls its exported `evaluateRun(runId)` — confirmed
+   exported by `@kontourai/flow@^1.4.0`. A `cliFlowRunner` (shells `flow
+   evaluate <runId>`, the confirmed subcommand) is provided for PATH-only
+   deployments. The trigger writes **nothing** to any bundle/ledger — it is only
+   a nudge; whatever the runner returns is discarded.
+3. **Backpressure / coalescing.** Per-`(bundleSource, claimId)` coalescing
+   collapses redundant *pending* deadlines (a re-armed claim's newest deadline
+   supersedes its older pending one), and a configurable `minFireIntervalMs`
+   rate-limits *fires* for the same claim. A flappy claim therefore can't storm
+   the trigger. Coalescing is harmless by design: under-firing within the window
+   is safe because Flow re-derives at the real `now` on the next allowed fire.
+
+## v0.2 architecture (decided defaults)
 
 - **Stack:** TypeScript, Node ESM (`>=22`), `node --test`. Mirrors Flow's
   tsconfig/scripts.
-- **`EphemerisScheduler`** core — `arm(bundle)`, `cancel(bundleId)`, restart-safe
-  `start()`, deterministic `tick()`.
+- **`EphemerisScheduler`** core — `arm(bundle)`, `cancel(bundleSource)`,
+  restart-safe `start()`, deterministic `tick()`, plus `minFireIntervalMs` /
+  `onCoalesced` for backpressure.
 - **Injectable `Clock`** — `SystemClock` (default) and `ManualClock` for tests.
   All timing flows through it; with `ManualClock` there are **no real
-  wall-clock waits** — firing is driven by `clock.advance()`.
-- **Pluggable `Trigger`** — default `FlowEvaluateTrigger` (shells `flow evaluate
-  <runId>`), plus `NoopTrigger` and `RecordingTrigger` for tests/examples.
+  wall-clock waits** — firing is driven *synchronously* by `clock.advance()`.
+- **Pluggable `Trigger`** — default `FlowEvaluateTrigger` over an injectable
+  `FlowRunner` (`programmaticFlowRunner` by default; `cliFlowRunner` available),
+  plus `NoopTrigger` and `RecordingTrigger` for tests/examples.
 - **Pluggable `Store`** — default `JsonFileStore` (persists pending + fired sets
   to disk; reloads and re-arms on startup), plus `InMemoryStore` for tests.
 - **Source adapters** — programmatic `arm(bundle)` API + `DirectoryWatcherSource`
-  that watches a directory of emitted bundle JSON files.
-- **Idempotency** — deadlines deduped by `(bundleId, claimId, expiresAt)`, fire
+  that watches a directory of emitted bundle JSON files (now keyed on `source`).
+- **Idempotency** — deadlines deduped by `(bundleSource, claimId, fireAt)`, fire
   at most once; fired keys persisted so reload / duplicate-arm / past-due never
   double-fire.
+- **Hachure binding** — `src/hachure-schema.ts` loads the published `claim` /
+  `trust-bundle` schemas straight from the `hachure` package and exposes a
+  dependency-free `validateClaimFreshness` for the slice Ephemeris reads. (No
+  full JSON-Schema engine is pulled in: Ephemeris reads a tiny, well-known slice,
+  and a test asserts its constraints still match the published schema.)
 
 ### Public API
 
@@ -86,55 +124,71 @@ trigger back into Flow's `evaluateRun`).
 import {
   EphemerisScheduler,           // core: arm / cancel / start / tick / stop
   Clock, SystemClock, ManualClock,
-  Trigger, FlowEvaluateTrigger, NoopTrigger, RecordingTrigger,
+  Trigger, FlowEvaluateTrigger,       // default trigger over a FlowRunner
+  FlowRunner, programmaticFlowRunner, cliFlowRunner,
+  NoopTrigger, RecordingTrigger,
   Store, InMemoryStore, JsonFileStore,
   DirectoryWatcherSource,
-  TrustBundleReadModel, ClaimReadModel, ArmedDeadline, deadlineKey,
+  TrustBundleReadModel, ClaimReadModel, ArmedDeadline,
+  deadlineKey, claimKey, runIdFromSource, HACHURE,
+  validateClaimFreshness, claimSchema, trustBundleSchema,
   deriveFireAt,
 } from "@kontourai/ephemeris";
 ```
 
 The read-model types (`TrustBundleReadModel`, `ClaimReadModel`) are a
-deliberately minimal, shape-only contract — Ephemeris does not depend on the full
-hachure/flow schema. (See the `TODO(schema)` note below.)
+deliberately minimal slice — Ephemeris carries only the freshness-bearing fields
+— but those fields now match Hachure's published `claim` / `trust-bundle` schema
+names and types exactly, and are validated against them at ingest.
 
 ## Quick start
 
 ```bash
 npm install
 npm run build      # tsc
-npm test           # build + node --test (9 tests, fully deterministic, no sleeps)
+npm test           # build + node --test (23 tests, fully deterministic, no sleeps)
 npm run example    # arm a claim that expires shortly, advance a ManualClock, fire once
 ```
 
 Run the daemon:
 
 ```bash
-ephemeris watch <bundleDir> [--store .ephemeris/wakeups.json] [--flow-cmd flow]
+ephemeris watch <bundleDir> \
+  [--store .ephemeris/wakeups.json] \
+  [--min-fire-interval <ms>] \
+  [--flow-mode programmatic|cli] [--flow-cmd flow] [--cwd <path>]
 ```
 
-## Open / TODO (pinned-before-real questions from the design)
+Flow invocation defaults to a **programmatic** import of `@kontourai/flow`'s
+`evaluateRun`; pass `--flow-mode cli` to shell out to the `flow evaluate` binary
+instead (e.g. when Flow is only available on PATH).
 
-These are the design's open questions; v0 picks a default for each and leaves a
-`TODO(...)` at the relevant code site.
+## Resolved in v0.2
 
-- **`TODO(emit-target)`** — *emits to what?* v0 shells out to `flow evaluate
-  <runId>` behind the `Trigger` interface. Still open: direct in-process
-  `evaluateRun` call vs. producer notify vs. generic event bus. (`src/trigger.ts`)
-- **`TODO(discovery)`** — *how it learns which bundles to watch.* v0 implements
-  `DirectoryWatcherSource` + the programmatic `arm()` API. Still open: subscribe
-  to emitted bundles vs. a registry vs. a stream. (`src/sources.ts`)
-- **`TODO(backpressure)`** — idempotency is per-deadline only; a flappy claim
-  that re-arms a *fresh* deadline each emit could still storm. No rate-limit /
-  coalescing yet. (`src/cli.ts`)
+These design open-questions are now decided in code (no `TODO(...)` marker left):
+
+- **`emit-target` → resolved.** Ephemeris invokes Flow's exported
+  `evaluateRun(runId)` programmatically by default, behind the injectable
+  `FlowRunner`/`Trigger` seam (CLI shell-out available as `cliFlowRunner`). It
+  remains swappable for a producer notify / event-bus adapter. (`src/trigger.ts`)
+- **`backpressure` → resolved.** Per-claim coalescing of pending deadlines +
+  `minFireIntervalMs` rate-limiting of fires. (`src/scheduler.ts`)
+- **`schema` → resolved.** Read-model aligned to and validated against the
+  published `hachure@^0.5.1` `claim` / `trust-bundle` schemas; keyed on `source`
+  (Hachure forbids a bundle `id`). (`src/types.ts`, `src/hachure-schema.ts`)
+
+## Still open / deferred (clearly out of v0.2 scope)
+
+- **`TODO(discovery)`** — *how it learns which bundles to watch.* v0.2 still
+  ships only `DirectoryWatcherSource` + the programmatic `arm()` API. Still open:
+  subscribe to emitted bundles vs. a registry vs. a stream. (`src/sources.ts`)
 - **`TODO(durability)`** — `JsonFileStore` rewrites the whole file per mutation
   (fine for a small single daemon). Swap for an append log / embedded KV as the
-  watched-bundle count grows. (`src/store.ts`)
-- **`TODO(schema)`** — align the local read-model with the published Hachure
-  TrustBundle / claim schema. (`src/types.ts`)
+  watched-bundle count grows — durability-at-scale is deferred. (`src/store.ts`)
 - **Shared hosted-ingest seam** — the hosted-ingest contract that Flow's
   `HostedConsoleSink` also needs is the same surface Ephemeris consumes. It
-  should be designed **once, for both**. Ephemeris co-owns this seam.
+  should be designed **once, for both**; that shared seam is still deferred.
+  Ephemeris co-owns it.
 
 ## Non-goals
 

@@ -21,10 +21,11 @@ const trigger = new RecordingTrigger();
 const scheduler = new EphemerisScheduler({ clock, store, trigger });
 await scheduler.start();
 
-// A bundle whose single claim expires at t=5000ms.
+// A Flow run-output bundle (Hachure shape: identified by `source`, no `id`)
+// whose single claim expires at t=5000ms. The runId Ephemeris fires against is
+// derived from the `flow-run:<def>:<runId>` source.
 const bundle = {
-  id: "bundle-1",
-  run: { id: "run-abc" },
+  source: "flow-run:my-flow:run-abc",
   claims: [{ id: "claim-1", expiresAt: new Date(5000).toISOString() }],
 };
 
@@ -41,7 +42,11 @@ scheduler.arm(bundle);
 clock.advance(1000);
 console.log(`after re-arm + advance: fired=${trigger.fired.length} (expected still 1)`);
 
-const key = deadlineKey({ bundleId: "bundle-1", claimId: "claim-1", fireAt: 5000 });
+const key = deadlineKey({
+  bundleSource: "flow-run:my-flow:run-abc",
+  claimId: "claim-1",
+  fireAt: 5000,
+});
 console.log(`fires for deadline key "${key}": ${trigger.countFor(deadlineKey, key)}`);
 
 if (trigger.fired.length !== 1) {

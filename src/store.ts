@@ -16,14 +16,16 @@ import { deadlineKey } from "./types.js";
 export interface Store {
   /** All currently-armed (not-yet-fired) deadlines. */
   pending(): ArmedDeadline[];
+  /** True if the given dedup key is currently pending (armed, not yet fired). */
+  has(key: string): boolean;
   /** True if the given dedup key has already fired. */
   hasFired(key: string): boolean;
   /** Persist an armed deadline. Idempotent on key. */
   addPending(deadline: ArmedDeadline): void;
-  /** Remove a pending deadline by key (e.g. on cancel or after firing). */
+  /** Remove a pending deadline by key (e.g. on cancel, supersede, or firing). */
   removePending(key: string): void;
   /** Remove all pending deadlines for a bundle (cancel). Returns removed keys. */
-  removePendingForBundle(bundleId: string): string[];
+  removePendingForBundle(bundleSource: string): string[];
   /** Mark a key as fired (and drop it from pending). Idempotent. */
   markFired(key: string): void;
 }
@@ -35,6 +37,10 @@ export class InMemoryStore implements Store {
 
   pending(): ArmedDeadline[] {
     return [...this.#pending.values()];
+  }
+
+  has(key: string): boolean {
+    return this.#pending.has(key);
   }
 
   hasFired(key: string): boolean {
@@ -51,10 +57,10 @@ export class InMemoryStore implements Store {
     this.#pending.delete(key);
   }
 
-  removePendingForBundle(bundleId: string): string[] {
+  removePendingForBundle(bundleSource: string): string[] {
     const removed: string[] = [];
     for (const [key, d] of this.#pending) {
-      if (d.bundleId === bundleId) {
+      if (d.bundleSource === bundleSource) {
         this.#pending.delete(key);
         removed.push(key);
       }
@@ -97,6 +103,10 @@ export class JsonFileStore implements Store {
     return [...this.#pendingMap.values()];
   }
 
+  has(key: string): boolean {
+    return this.#pendingMap.has(key);
+  }
+
   hasFired(key: string): boolean {
     return this.#fired.has(key);
   }
@@ -112,10 +122,10 @@ export class JsonFileStore implements Store {
     if (this.#pendingMap.delete(key)) this.#flush();
   }
 
-  removePendingForBundle(bundleId: string): string[] {
+  removePendingForBundle(bundleSource: string): string[] {
     const removed: string[] = [];
     for (const [key, d] of this.#pendingMap) {
-      if (d.bundleId === bundleId) {
+      if (d.bundleSource === bundleSource) {
         this.#pendingMap.delete(key);
         removed.push(key);
       }

@@ -9,10 +9,11 @@ import {
   deadlineKey,
 } from "../../dist/index.js";
 
+// A Flow run-output bundle as Hachure shapes it: identified by `source`
+// (no top-level `id`), runId derived from the `flow-run:<def>:<runId>` source.
 function bundle(overrides = {}) {
   return {
-    id: "bundle-1",
-    run: { id: "run-abc" },
+    source: "flow-run:my-flow:run-abc",
     claims: [{ id: "claim-1", expiresAt: new Date(5000).toISOString() }],
     ...overrides,
   };
@@ -99,7 +100,11 @@ test("idempotency: re-arm same bundle does not double-fire", async () => {
   clock.advance(1000);
   assert.equal(trigger.fired.length, 1, "re-arm after fire must not re-fire");
 
-  const key = deadlineKey({ bundleId: "bundle-1", claimId: "claim-1", fireAt: 5000 });
+  const key = deadlineKey({
+    bundleSource: "flow-run:my-flow:run-abc",
+    claimId: "claim-1",
+    fireAt: 5000,
+  });
   assert.equal(trigger.countFor(deadlineKey, key), 1);
   scheduler.stop();
 });
@@ -122,7 +127,7 @@ test("idempotency: past-due deadline fires once on arm", async () => {
   scheduler.stop();
 });
 
-test("cancel(bundleId) removes pending deadlines so they never fire", async () => {
+test("cancel(bundleSource) removes pending deadlines so they never fire", async () => {
   const clock = new ManualClock(0);
   const trigger = new RecordingTrigger();
   const scheduler = new EphemerisScheduler({
@@ -134,7 +139,7 @@ test("cancel(bundleId) removes pending deadlines so they never fire", async () =
 
   scheduler.arm(bundle());
   assert.equal(scheduler.pendingCount(), 1);
-  scheduler.cancel("bundle-1");
+  scheduler.cancel("flow-run:my-flow:run-abc");
   assert.equal(scheduler.pendingCount(), 0);
   clock.advance(10_000);
   assert.equal(trigger.fired.length, 0, "cancelled deadline never fires");
@@ -150,7 +155,6 @@ test("trigger writes nothing — firing is only a nudge", async () => {
   const frozenBundle = Object.freeze(bundle());
   Object.freeze(frozenBundle.claims);
   Object.freeze(frozenBundle.claims[0]);
-  Object.freeze(frozenBundle.run);
 
   const scheduler = new EphemerisScheduler({
     clock,
@@ -165,8 +169,7 @@ test("trigger writes nothing — firing is only a nudge", async () => {
 
   // Bundle is byte-for-byte unchanged: Ephemeris authored nothing into it.
   assert.deepEqual(frozenBundle, {
-    id: "bundle-1",
-    run: { id: "run-abc" },
+    source: "flow-run:my-flow:run-abc",
     claims: [{ id: "claim-1", expiresAt: new Date(5000).toISOString() }],
   });
   scheduler.stop();

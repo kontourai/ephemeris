@@ -6,16 +6,21 @@
 
 // Core
 export { EphemerisScheduler, deriveFireAt } from "./scheduler.js";
-export type { EphemerisSchedulerOptions } from "./scheduler.js";
+export type {
+  EphemerisSchedulerOptions,
+  CoalesceReason,
+} from "./scheduler.js";
 
 // Clock
 export type { Clock } from "./clock.js";
 export { SystemClock, ManualClock } from "./clock.js";
 
 // Trigger
-export type { Trigger } from "./trigger.js";
+export type { Trigger, FlowRunner } from "./trigger.js";
 export {
   FlowEvaluateTrigger,
+  programmaticFlowRunner,
+  cliFlowRunner,
   NoopTrigger,
   RecordingTrigger,
 } from "./trigger.js";
@@ -27,10 +32,27 @@ export { InMemoryStore, JsonFileStore } from "./store.js";
 // Sources
 export { DirectoryWatcherSource } from "./sources.js";
 
-// Read-model types
+// Read-model types (aligned to the published Hachure schema)
 export type {
   TrustBundleReadModel,
   ClaimReadModel,
   ArmedDeadline,
 } from "./types.js";
-export { deadlineKey } from "./types.js";
+export {
+  deadlineKey,
+  claimKey,
+  runIdFromSource,
+  HACHURE,
+} from "./types.js";
+
+// Hachure schema binding
+export {
+  claimSchema,
+  trustBundleSchema,
+  validateClaimFreshness,
+} from "./hachure-schema.js";
+export type {
+  JsonSchema,
+  JsonSchemaProperty,
+  ValidationIssue,
+} from "./hachure-schema.js";

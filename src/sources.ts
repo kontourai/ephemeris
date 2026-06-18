@@ -9,9 +9,11 @@ import type { TrustBundleReadModel } from "./types.js";
  * API is the other.
  *
  * TODO(discovery): the design pins discovery as an open question (subscribe to
- * emitted bundles vs. registry vs. watch stream/directory). v0 implements the
- * directory-watch variant; it is one source among several future adapters and
- * shares the hosted-ingest seam with Flow's HostedConsoleSink. See README.
+ * emitted bundles vs. registry vs. watch stream/directory). v0.2 still ships only
+ * the directory-watch variant; it is one source among several future adapters and
+ * shares the still-deferred hosted-ingest seam with Flow's HostedConsoleSink.
+ * (The bundle SHAPE it reads is now aligned to the Hachure schema — see
+ * `src/types.ts` — but discovery beyond directory-watch remains open.) See README.
  */
 export class DirectoryWatcherSource {
   readonly #dir: string;
@@ -56,11 +58,17 @@ export class DirectoryWatcherSource {
       // Partial write / non-bundle file — ignore; the watcher will re-fire.
       return;
     }
-    if (!bundle || typeof bundle.id !== "string" || !Array.isArray(bundle.claims)) {
+    // A Hachure bundle is identified by `source` (it has no top-level `id`).
+    if (
+      !bundle ||
+      typeof bundle.source !== "string" ||
+      !Array.isArray(bundle.claims)
+    ) {
       return;
     }
-    // arm() is itself idempotent; #seen just avoids redundant work on re-scan.
-    this.#seen.add(bundle.id);
+    // arm() is itself idempotent + flap-coalescing; #seen just avoids redundant
+    // work on re-scan.
+    this.#seen.add(bundle.source);
     this.#scheduler.arm(bundle);
   }
 }

@@ -3,20 +3,27 @@
  * Minimal Ephemeris daemon entry point.
  *
  * Usage:
- *   ephemeris watch <bundleDir> [--store <path>] [--flow-cmd <cmd>]
+ *   ephemeris watch <bundleDir> [--store <path>] [--min-fire-interval <ms>]
+ *                               [--flow-mode programmatic|cli] [--flow-cmd <cmd>]
+ *                               [--cwd <path>]
  *
- * Watches a directory of emitted bundle JSON files, arms each claim deadline,
- * and fires Flow's `evaluate <runId>` at the deadline. Durable across restarts
- * via a JsonFileStore.
+ * Watches a directory of emitted Hachure run-output bundle JSON files, arms each
+ * claim deadline (read from `expiresAt` / `ttlSeconds`), and fires Flow's
+ * `evaluateRun` at the deadline. Durable across restarts via a JsonFileStore;
+ * flap-resistant via per-claim coalescing + a min-fire-interval.
  *
- * TODO(backpressure): no dedup/rate-limit beyond per-deadline idempotency yet.
- * A flappy claim that re-arms a fresh deadline each emit could still storm. See
- * README "Open / TODO".
+ * Flow invocation defaults to a PROGRAMMATIC import of `@kontourai/flow`'s
+ * `evaluateRun`; pass `--flow-mode cli` to shell out to the `flow evaluate`
+ * binary instead (e.g. when Flow is only on PATH).
  */
 import { EphemerisScheduler } from "./scheduler.js";
 import { SystemClock } from "./clock.js";
 import { JsonFileStore } from "./store.js";
-import { FlowEvaluateTrigger } from "./trigger.js";
+import {
+  FlowEvaluateTrigger,
+  programmaticFlowRunner,
+  cliFlowRunner,
+} from "./trigger.js";
 import { DirectoryWatcherSource } from "./sources.js";
 
 function arg(name: string, fallback?: string): string | undefined {
@@ -28,18 +35,29 @@ async function main(): Promise<void> {
   const [, , command, bundleDir] = process.argv;
   if (command !== "watch" || !bundleDir) {
     console.error(
-      "usage: ephemeris watch <bundleDir> [--store <path>] [--flow-cmd <cmd>]",
+      "usage: ephemeris watch <bundleDir> [--store <path>] " +
+        "[--min-fire-interval <ms>] [--flow-mode programmatic|cli] " +
+        "[--flow-cmd <cmd>] [--cwd <path>]",
     );
     process.exit(2);
   }
 
   const storePath = arg("store", ".ephemeris/wakeups.json")!;
+  const minFireIntervalMs = Number(arg("min-fire-interval", "0"));
+  const flowMode = arg("flow-mode", "programmatic")!;
   const flowCmd = arg("flow-cmd", "flow")!;
+  const cwd = arg("cwd");
+
+  const runner =
+    flowMode === "cli"
+      ? cliFlowRunner(cwd ? { command: flowCmd, cwd } : { command: flowCmd })
+      : programmaticFlowRunner(cwd ? { cwd } : {});
 
   const scheduler = new EphemerisScheduler({
     clock: new SystemClock(),
     store: new JsonFileStore(storePath),
-    trigger: new FlowEvaluateTrigger({ command: flowCmd }),
+    trigger: new FlowEvaluateTrigger({ runner }),
+    minFireIntervalMs: Number.isFinite(minFireIntervalMs) ? minFireIntervalMs : 0,
   });
   await scheduler.start();
 
@@ -47,7 +65,9 @@ async function main(): Promise<void> {
   source.start();
 
   console.error(
-    `[ephemeris] watching ${bundleDir} (store=${storePath}, pending=${scheduler.pendingCount()})`,
+    `[ephemeris] watching ${bundleDir} (store=${storePath}, ` +
+      `flow=${flowMode}, minFireInterval=${minFireIntervalMs}ms, ` +
+      `pending=${scheduler.pendingCount()})`,
   );
 
   const shutdown = () => {
