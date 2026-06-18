@@ -1,7 +1,7 @@
 # Ephemeris
 
 **External freshness scheduler / event-bridge for the Kontour suite.**
-Status: v0.2 · Layer: time actor.
+Status: v0.3 · Layer: time actor.
 
 > *Ephemeris* (n.) — in surveying/GNSS, a table of time-indexed positions that
 > has an age, goes stale, and must be refreshed. The name carries the
@@ -92,6 +92,47 @@ v0.2 turns three v0 scaffolds into real behavior, within a bounded increment:
    the trigger. Coalescing is harmless by design: under-firing within the window
    is safe because Flow re-derives at the real `now` on the next allowed fire.
 
+## What changed in v0.3
+
+v0.3 closes the two deferred TODOs from v0.2 — *richer discovery* and
+*durability-at-scale* — in a bounded, well-tested increment. No invariant moved:
+Ephemeris still triggers and never authors, derives expiry, owns no authority,
+and stays deterministic under `ManualClock` (no real sleeps, no real timers in
+tests).
+
+1. **Discovery beyond directory-watch — `RegistrySource`.** Ephemeris now ships
+   a second, **event-driven** source alongside `DirectoryWatcherSource`: an
+   in-process producer registry. A producer that already has an emitted bundle in
+   hand calls `register(bundle)` (arms immediately) / `deregister(source)`
+   (cancels immediately); the scheduler learns about it with **no polling and no
+   clock coupling**.
+   - *Why a registry over a poller:* discovery here is in-process — the producer
+     can push directly, so a registry models the "producer notify" path exactly.
+     There is no interval, so there is nothing to drive from a `Clock`; tests are
+     deterministic by construction (every call is synchronous). A clock-driven
+     `PollingSource` would only be needed for an EXTERNAL store that can't push —
+     that is the still-deferred shared hosted-ingest seam, not in-process
+     discovery.
+   - *Composable:* a `Source` is anything that feeds bundles to `arm()` and
+     signals removals to `cancel()`. Both sources (plus the raw `arm()` API) now
+     target a narrow `SchedulerSink` and can run against **one scheduler at
+     once**; `arm()`/`cancel()` are idempotent + flap-coalescing, so overlapping
+     sources never double-fire. (`src/sources.ts`)
+2. **Durability-at-scale — `AppendLogStore`.** The v0.2 `JsonFileStore` rewrites
+   the whole file per mutation (O(state) each time) — fine for a small daemon.
+   `AppendLogStore` instead appends **one record per mutation** (arm / fire /
+   remove → O(1)), reconstructs state by **replaying the log on load**, and
+   **compacts** when the log grows past a threshold (rewrite a single snapshot
+   line + truncate, bounding the file). It is a drop-in behind the same `Store`
+   interface.
+   - *Proven (tests):* (a) reload **replays to identical state**; (b) **fired
+     history survives restart** so a reload / re-armed bundle never double-fires;
+     (c) **compaction preserves state and bounds the log**. A torn final line (a
+     crash mid-append) is tolerated — replay skips it, losing at most the last
+     in-flight mutation, which the scheduler re-derives on the next arm.
+   - `JsonFileStore` stays the simple **no-config default**; `InMemoryStore`
+     stays the test store. (`src/store.ts`)
+
 ## v0.2 architecture (decided defaults)
 
 - **Stack:** TypeScript, Node ESM (`>=22`), `node --test`. Mirrors Flow's
@@ -106,9 +147,14 @@ v0.2 turns three v0 scaffolds into real behavior, within a bounded increment:
   `FlowRunner` (`programmaticFlowRunner` by default; `cliFlowRunner` available),
   plus `NoopTrigger` and `RecordingTrigger` for tests/examples.
 - **Pluggable `Store`** — default `JsonFileStore` (persists pending + fired sets
-  to disk; reloads and re-arms on startup), plus `InMemoryStore` for tests.
-- **Source adapters** — programmatic `arm(bundle)` API + `DirectoryWatcherSource`
-  that watches a directory of emitted bundle JSON files (now keyed on `source`).
+  to disk; reloads and re-arms on startup), plus `InMemoryStore` for tests and
+  `AppendLogStore` for durability-at-scale (append-per-mutation + compaction; see
+  "What changed in v0.3").
+- **Source adapters** — programmatic `arm(bundle)` API + two pluggable sources:
+  `DirectoryWatcherSource` (watches a directory of emitted bundle JSON files,
+  keyed on `source`) and `RegistrySource` (event-driven in-process producer
+  registry). Both target the narrow `SchedulerSink` and compose against one
+  scheduler.
 - **Idempotency** — deadlines deduped by `(bundleSource, claimId, fireAt)`, fire
   at most once; fired keys persisted so reload / duplicate-arm / past-due never
   double-fire.
@@ -127,8 +173,8 @@ import {
   Trigger, FlowEvaluateTrigger,       // default trigger over a FlowRunner
   FlowRunner, programmaticFlowRunner, cliFlowRunner,
   NoopTrigger, RecordingTrigger,
-  Store, InMemoryStore, JsonFileStore,
-  DirectoryWatcherSource,
+  Store, InMemoryStore, JsonFileStore, AppendLogStore,
+  DirectoryWatcherSource, RegistrySource, SchedulerSink,
   TrustBundleReadModel, ClaimReadModel, ArmedDeadline,
   deadlineKey, claimKey, runIdFromSource, HACHURE,
   validateClaimFreshness, claimSchema, trustBundleSchema,
@@ -146,7 +192,7 @@ names and types exactly, and are validated against them at ingest.
 ```bash
 npm install
 npm run build      # tsc
-npm test           # build + node --test (23 tests, fully deterministic, no sleeps)
+npm test           # build + node --test (34 tests, fully deterministic, no sleeps)
 npm run example    # arm a claim that expires shortly, advance a ManualClock, fire once
 ```
 
@@ -155,13 +201,32 @@ Run the daemon:
 ```bash
 ephemeris watch <bundleDir> \
   [--store .ephemeris/wakeups.json] \
+  [--store-mode json|appendlog] [--compact-threshold <n>] \
   [--min-fire-interval <ms>] \
   [--flow-mode programmatic|cli] [--flow-cmd flow] [--cwd <path>]
 ```
 
+The store defaults to `json` (`JsonFileStore`, full rewrite per mutation —
+simple). Pass `--store-mode appendlog` for `AppendLogStore` (append-per-mutation
++ compaction) when the watched-bundle count grows; `--compact-threshold` tunes
+how many records accumulate before it rewrites a snapshot and truncates.
+
 Flow invocation defaults to a **programmatic** import of `@kontourai/flow`'s
 `evaluateRun`; pass `--flow-mode cli` to shell out to the `flow evaluate` binary
 instead (e.g. when Flow is only available on PATH).
+
+## Resolved in v0.3
+
+These v0.2 open-questions are now closed in code (no `TODO(...)` marker left):
+
+- **`discovery` → resolved.** Ephemeris ships two pluggable sources —
+  `DirectoryWatcherSource` (filesystem) and `RegistrySource` (event-driven
+  in-process producer registry) — plus the raw `arm()` API, all composing against
+  one `SchedulerSink`. What remains deferred is only the shared *hosted-ingest*
+  transport (below), not in-process discovery. (`src/sources.ts`)
+- **`durability` → resolved.** `AppendLogStore` appends one record per mutation,
+  replays on load, and compacts past a threshold (snapshot + truncate) to bound
+  the log. `JsonFileStore` stays the simple default. (`src/store.ts`)
 
 ## Resolved in v0.2
 
@@ -177,17 +242,14 @@ These design open-questions are now decided in code (no `TODO(...)` marker left)
   published `hachure@^0.5.1` `claim` / `trust-bundle` schemas; keyed on `source`
   (Hachure forbids a bundle `id`). (`src/types.ts`, `src/hachure-schema.ts`)
 
-## Still open / deferred (clearly out of v0.2 scope)
+## Still open / deferred (clearly out of v0.3 scope)
 
-- **`TODO(discovery)`** — *how it learns which bundles to watch.* v0.2 still
-  ships only `DirectoryWatcherSource` + the programmatic `arm()` API. Still open:
-  subscribe to emitted bundles vs. a registry vs. a stream. (`src/sources.ts`)
-- **`TODO(durability)`** — `JsonFileStore` rewrites the whole file per mutation
-  (fine for a small single daemon). Swap for an append log / embedded KV as the
-  watched-bundle count grows — durability-at-scale is deferred. (`src/store.ts`)
-- **Shared hosted-ingest seam** — the hosted-ingest contract that Flow's
-  `HostedConsoleSink` also needs is the same surface Ephemeris consumes. It
-  should be designed **once, for both**; that shared seam is still deferred.
+- **Shared hosted-ingest seam** — the only genuinely-deferred discovery item.
+  The cross-process hosted-ingest contract that Flow's `HostedConsoleSink` also
+  needs is the same surface Ephemeris consumes; it should be designed **once, for
+  both**, so it is deferred until that joint design lands. (When it does, the
+  natural adapter is a clock-driven `PollingSource` over the external store, or a
+  push subscription — both slot into the existing `SchedulerSink` seam.)
   Ephemeris co-owns it.
 
 ## Non-goals

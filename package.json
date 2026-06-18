@@ -1,6 +1,6 @@
 {
   "name": "@kontourai/ephemeris",
-  "version": "0.0.0",
+  "version": "0.3.0",
   "description": "External freshness scheduler / event-bridge for the Kontour suite. Turns time into a trigger.",
   "license": "Apache-2.0",
   "type": "module",
