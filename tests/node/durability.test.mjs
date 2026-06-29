@@ -408,3 +408,98 @@ test("JsonFileStore degrades gracefully on a torn file and writes atomically", (
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ── Fired-history pruning (#31): bound the idempotency-key set ───────────────
+
+// #31 — fired idempotency keys accumulated for all time across every store, and
+// each AppendLogStore snapshot re-embedded the full fired array (O(history) and
+// monotonically growing). prune() drops keys whose deadline fireAt is past the
+// retention horizon; recent keys stay so reload/duplicate-arm still can't double-fire.
+test("Store.prune drops fired keys past the horizon and keeps recent ones (all stores)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ephemeris-prune-"));
+  try {
+    const oldKey = deadlineKey({ bundleSource: "flow-run:f:r", claimId: "old", fireAt: 1_000 });
+    const recentKey = deadlineKey({ bundleSource: "flow-run:f:r", claimId: "recent", fireAt: 9_000 });
+    const stores = [
+      ["InMemoryStore", new InMemoryStore()],
+      ["JsonFileStore", new JsonFileStore(join(dir, "json.json"))],
+      ["AppendLogStore", new AppendLogStore(join(dir, "log.ndjson"))],
+    ];
+    for (const [name, store] of stores) {
+      store.markFired(oldKey);
+      store.markFired(recentKey);
+      store.prune(5_000); // drop fireAt < 5000
+      assert.equal(store.hasFired(oldKey), false, `${name}: old fired key is pruned`);
+      assert.equal(store.hasFired(recentKey), true, `${name}: recent fired key is kept`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("JsonFileStore.prune is durable — a reload does not resurrect pruned fired keys", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ephemeris-prune-json-"));
+  try {
+    const path = join(dir, "wakeups.json");
+    const oldKey = deadlineKey({ bundleSource: "s", claimId: "old", fireAt: 1_000 });
+    const recentKey = deadlineKey({ bundleSource: "s", claimId: "recent", fireAt: 9_000 });
+    const store = new JsonFileStore(path);
+    store.markFired(oldKey);
+    store.markFired(recentKey);
+    store.prune(5_000);
+
+    const reloaded = new JsonFileStore(path);
+    assert.equal(reloaded.hasFired(oldKey), false, "pruned key stays pruned across reload");
+    assert.equal(reloaded.hasFired(recentKey), true, "recent key survives reload");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("AppendLogStore prune bounds the fired array embedded in compacted snapshots", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ephemeris-prune-log-"));
+  try {
+    const path = join(dir, "log.ndjson");
+    const store = new AppendLogStore(path);
+    const oldKey = deadlineKey({ bundleSource: "s", claimId: "old", fireAt: 1_000 });
+    const recentKey = deadlineKey({ bundleSource: "s", claimId: "recent", fireAt: 9_000 });
+    store.markFired(oldKey);
+    store.markFired(recentKey);
+    store.prune(5_000); // drops old from memory
+    store.compact(); // snapshot now embeds only the bounded fired set
+
+    const firstLine = readFileSync(path, "utf8").trim().split("\n")[0];
+    const snapshot = JSON.parse(firstLine);
+    assert.equal(snapshot.op, "snapshot");
+    assert.ok(!snapshot.fired.includes(oldKey), "snapshot does not re-embed the pruned key");
+    assert.ok(snapshot.fired.includes(recentKey), "snapshot keeps the recent key");
+
+    const reloaded = new AppendLogStore(path);
+    assert.equal(reloaded.hasFired(oldKey), false, "reload reflects the bounded snapshot");
+    assert.equal(reloaded.hasFired(recentKey), true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("scheduler prunes fired history past firedRetentionMs as the clock advances", () => {
+  const clock = new ManualClock(0);
+  const trigger = new RecordingTrigger();
+  const store = new InMemoryStore();
+  const scheduler = new EphemerisScheduler({ clock, store, trigger, firedRetentionMs: 10_000 });
+  scheduler.arm({
+    source: "flow-run:f:r",
+    claims: [{ id: "c", expiresAt: new Date(1_000).toISOString() }],
+  });
+  const key = deadlineKey({ bundleSource: "flow-run:f:r", claimId: "c", fireAt: 1_000 });
+
+  clock.set(1_000); // deadline fires; key recorded
+  assert.equal(trigger.fired.length, 1);
+  assert.equal(store.hasFired(key), true, "fired key retained within the window");
+
+  clock.set(5_000); // still within retention (5000 < 1000 + 10000)
+  assert.equal(store.hasFired(key), true, "still retained mid-window");
+
+  clock.set(12_000); // now - retention = 2000 > fireAt 1000 → pruned
+  assert.equal(store.hasFired(key), false, "fired key pruned once past the retention horizon");
+});

@@ -32,6 +32,14 @@ export interface EphemerisSchedulerOptions {
    * useful for metrics/visibility. Default: no-op.
    */
   onCoalesced?: (deadline: ArmedDeadline, reason: CoalesceReason) => void;
+  /**
+   * Retention window (ms) for fired-history idempotency keys. Each sweep prunes
+   * fired keys whose deadline `fireAt` is older than `now - firedRetentionMs`,
+   * bounding the store (and AppendLogStore snapshots) instead of letting fired
+   * history grow for all time. Over-firing is harmless, so forgetting long-past
+   * fires is safe. Default 7 days; pass `Infinity` to never prune.
+   */
+  firedRetentionMs?: number;
 }
 
 /** Why a fire was coalesced away (for observability). */
@@ -73,6 +81,7 @@ export class EphemerisScheduler {
   readonly #trigger: Trigger;
   readonly #onError: (err: unknown, d: ArmedDeadline) => void;
   readonly #minFireIntervalMs: number;
+  readonly #firedRetentionMs: number;
   readonly #onCoalesced: (d: ArmedDeadline, reason: CoalesceReason) => void;
 
   /** Live timer handles for SystemClock mode, keyed by deadline key. */
@@ -91,6 +100,8 @@ export class EphemerisScheduler {
     this.#store = options.store ?? new InMemoryStore();
     this.#trigger = options.trigger ?? new FlowEvaluateTrigger();
     this.#minFireIntervalMs = Math.max(0, options.minFireIntervalMs ?? 0);
+    // Default 7 days. Math.max guards against a negative window pruning live keys.
+    this.#firedRetentionMs = Math.max(0, options.firedRetentionMs ?? 7 * 24 * 60 * 60 * 1000);
     this.#onCoalesced = options.onCoalesced ?? (() => {});
     this.#onError =
       options.onError ??
@@ -225,6 +236,11 @@ export class EphemerisScheduler {
     } finally {
       this.#ticking = false;
     }
+    // Bound fired-history once per sweep: drop idempotency keys whose deadline is
+    // older than the retention window. Within the window, reload/duplicate-arm still
+    // can't double-fire; beyond it, a re-arm of a long-past deadline may re-fire,
+    // which is harmless (firing is a nudge; Flow re-derives at the real `now`).
+    this.#store.prune(this.#clock.now() - this.#firedRetentionMs);
     return all;
   }
 
