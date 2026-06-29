@@ -72,8 +72,11 @@ export class FlowEvaluateTrigger implements Trigger {
  */
 export function programmaticFlowRunner(options: { cwd?: string } = {}): FlowRunner {
   return async (runId: string): Promise<void> => {
-    // Dynamic import keeps `@kontourai/flow` off the hard dependency path.
-    const flow = (await import("@kontourai/flow")) as {
+    // Dynamic import keeps `@kontourai/flow` off the hard dependency path — it is
+    // an OPTIONAL peer (ops#30). The specifier is held in a `string`-typed const so
+    // the build does not require flow's types for a package that may be absent.
+    const flowModule: string = "@kontourai/flow";
+    const flow = (await import(flowModule)) as {
       evaluateRun: (runId: string, opts?: { cwd?: string }) => Promise<unknown>;
     };
     if (typeof flow.evaluateRun !== "function") {

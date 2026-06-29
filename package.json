@@ -46,8 +46,15 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "@kontourai/flow": "^1.4.0",
     "hachure": "^0.5.1"
+  },
+  "peerDependencies": {
+    "@kontourai/flow": "^1.4.0"
+  },
+  "peerDependenciesMeta": {
+    "@kontourai/flow": {
+      "optional": true
+    }
   },
   "publishConfig": {
     "access": "public",
