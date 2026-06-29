@@ -6,17 +6,21 @@ import {
   readFileSync,
   writeFileSync,
   appendFileSync,
+  existsSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   EphemerisScheduler,
   ManualClock,
+  InMemoryStore,
   JsonFileStore,
   AppendLogStore,
   RecordingTrigger,
   deadlineKey,
 } from "../../dist/index.js";
+
+const MAX_TIMER_DELAY_MS = 2_147_483_647; // setTimeout's 2^31-1 ms ceiling
 
 function bundle() {
   return {
@@ -323,6 +327,83 @@ test("AppendLogStore: appends one record per mutation (not a full rewrite)", () 
     store.markFired(deadlineKey({ bundleSource: "s", claimId: "c1", fireAt: 1 }));
     assert.equal(countLines(path), 3, "fire is one more appended record");
     assert.equal(store.logLength(), 3, "logLength tracks records since last snapshot");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── Long-horizon timers + JsonFileStore atomicity ───────────────────────────
+
+// #28 — a deadline more than ~24.8 days out must not arm a setTimeout above the
+// 2^31-1 ceiling. Node would clamp it to 1ms, fire early, find nothing due, and
+// (because the key stays in #timers) never re-arm — so the deadline never fires
+// on its own timer. The fix caps the delay and chains a fresh timer for the rest.
+// (Every other test uses ManualClock, which bypasses real timers entirely.)
+test("armTimer caps long-horizon delays and chains re-arms (no setTimeout overflow)", () => {
+  const FORTY_DAYS = 40 * 24 * 60 * 60 * 1000; // > MAX_TIMER_DELAY_MS
+  let now = 0;
+  const clock = { now: () => now }; // a non-Manual clock -> real-timer path, controllable
+
+  const captured = [];
+  const realSetTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (fn, delay) => {
+    captured.push({ fn, delay });
+    return { unref() {} };
+  };
+  try {
+    const trigger = new RecordingTrigger();
+    const scheduler = new EphemerisScheduler({ clock, store: new InMemoryStore(), trigger });
+    scheduler.arm({
+      source: "flow-run:f:r",
+      claims: [{ id: "c", expiresAt: new Date(now + FORTY_DAYS).toISOString() }],
+    });
+
+    assert.equal(captured.length, 1, "arms exactly one timer");
+    assert.equal(captured[0].delay, MAX_TIMER_DELAY_MS, "caps at the ceiling for a 40-day deadline");
+    assert.equal(trigger.fired.length, 0, "does not fire before the real deadline");
+
+    // The capped timer fires early (clock not advanced): must re-arm, not fire.
+    captured[0].fn();
+    assert.equal(trigger.fired.length, 0, "early capped tick must not fire the deadline");
+    assert.equal(captured.length, 2, "re-arms a fresh timer for the remainder");
+    assert.ok(captured[1].delay <= MAX_TIMER_DELAY_MS, "the chained delay is also capped");
+
+    // Reach the real deadline; firing the chained timer now fires once.
+    now += FORTY_DAYS;
+    captured[1].fn();
+    assert.equal(trigger.fired.length, 1, "fires exactly once the real instant is reached");
+    assert.equal(trigger.fired[0].claimId, "c");
+  } finally {
+    globalThis.setTimeout = realSetTimeout;
+  }
+});
+
+// #29 — a truncated/torn JsonFileStore file must degrade gracefully on load (it
+// previously threw SyntaxError, crashing boot, unlike AppendLogStore which
+// tolerates a torn line), and #flush must write atomically (temp + rename).
+test("JsonFileStore degrades gracefully on a torn file and writes atomically", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ephemeris-json-"));
+  try {
+    const path = join(dir, "wakeups.json");
+
+    // A truncated file (crash mid-write, pre-fix) must not crash construction.
+    writeFileSync(path, '{ "version": 1, "pending": [ { "bundleSour', "utf8");
+    let store;
+    assert.doesNotThrow(() => {
+      store = new JsonFileStore(path);
+    }, "must not throw on a torn file");
+    assert.deepEqual(store.pending(), [], "torn file degrades to an empty pending set");
+
+    // A write rewrites a clean, parseable file with no leftover temp artifact.
+    store.addPending({ bundleSource: "flow-run:f:r", runId: "r", claimId: "c", fireAt: 5000 });
+    assert.ok(existsSync(path), "file exists after write");
+    assert.ok(!existsSync(`${path}.tmp`), "no leftover .tmp after the atomic rename");
+    assert.doesNotThrow(() => JSON.parse(readFileSync(path, "utf8")), "file is valid JSON");
+
+    // A fresh store reloads the pending deadline.
+    const reloaded = new JsonFileStore(path);
+    assert.equal(reloaded.pending().length, 1, "round-trips the pending deadline");
+    assert.equal(reloaded.pending()[0].claimId, "c");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
