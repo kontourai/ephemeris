@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { dirname } from "node:path";
 import type { ArmedDeadline } from "./types.js";
-import { deadlineKey } from "./types.js";
+import { deadlineKey, deadlineKeyFireAt } from "./types.js";
 
 /**
  * Durable persistence for the scheduler's two sets:
@@ -35,6 +35,12 @@ export interface Store {
   removePendingForBundle(bundleSource: string): string[];
   /** Mark a key as fired (and drop it from pending). Idempotent. */
   markFired(key: string): void;
+  /**
+   * Drop fired-history keys whose deadline `fireAt` is strictly before
+   * `beforeFireAt` — idempotency keys for deadlines firmly in the past. Bounds the
+   * fired set so it cannot grow for all time. Idempotent; malformed keys are kept.
+   */
+  prune(beforeFireAt: number): void;
 }
 
 /** In-memory store for tests and ephemeral use. */
@@ -78,6 +84,13 @@ export class InMemoryStore implements Store {
   markFired(key: string): void {
     this.#pending.delete(key);
     this.#fired.add(key);
+  }
+
+  prune(beforeFireAt: number): void {
+    for (const key of this.#fired) {
+      const fireAt = deadlineKeyFireAt(key);
+      if (Number.isFinite(fireAt) && fireAt < beforeFireAt) this.#fired.delete(key);
+    }
   }
 }
 
@@ -148,6 +161,20 @@ export class JsonFileStore implements Store {
     this.#pendingMap.delete(key);
     this.#fired.add(key);
     this.#flush();
+  }
+
+  prune(beforeFireAt: number): void {
+    let removed = false;
+    for (const key of this.#fired) {
+      const fireAt = deadlineKeyFireAt(key);
+      if (Number.isFinite(fireAt) && fireAt < beforeFireAt) {
+        this.#fired.delete(key);
+        removed = true;
+      }
+    }
+    // Persist so the pruned set survives a reload (this store rewrites the whole
+    // file per mutation, so a flush here is consistent with its model).
+    if (removed) this.#flush();
   }
 
   #load(): void {
@@ -290,6 +317,17 @@ export class AppendLogStore implements Store {
     // pending) — that keeps a flood of duplicate mark-fired calls from bloating
     // the log without changing state.
     if (wasPending || !wasFired) this.#append({ op: "fire", key });
+  }
+
+  prune(beforeFireAt: number): void {
+    for (const key of this.#fired) {
+      const fireAt = deadlineKeyFireAt(key);
+      if (Number.isFinite(fireAt) && fireAt < beforeFireAt) this.#fired.delete(key);
+    }
+    // In-memory only: the next compaction's snapshot embeds `#fired` (now pruned),
+    // so snapshots stay bounded instead of re-embedding the full fired history.
+    // Old `fire` records in the live log are dropped at that compaction; a reload
+    // before then transiently replays them and is re-pruned on the next sweep.
   }
 
   /** Current number of records in the log since the last snapshot (for tests). */
