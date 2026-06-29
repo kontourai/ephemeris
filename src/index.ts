@@ -48,8 +48,8 @@ export {
 
 // Hachure schema binding
 export {
-  claimSchema,
-  trustBundleSchema,
+  getClaimSchema,
+  getTrustBundleSchema,
   validateClaimFreshness,
 } from "./hachure-schema.js";
 export type {

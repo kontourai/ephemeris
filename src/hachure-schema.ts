@@ -50,10 +50,22 @@ function loadHachureSchema(name: string): JsonSchema {
   return JSON.parse(readFileSync(schemaPath, "utf8")) as JsonSchema;
 }
 
-/** The published Hachure `claim` schema. */
-export const claimSchema: JsonSchema = loadHachureSchema("claim");
-/** The published Hachure `trust-bundle` schema. */
-export const trustBundleSchema: JsonSchema = loadHachureSchema("trust-bundle");
+let claimSchemaCache: JsonSchema | undefined;
+let trustBundleSchemaCache: JsonSchema | undefined;
+
+/**
+ * The published Hachure `claim` schema, read from disk and memoized on first use.
+ * Lazy so importing this module has no side effects — a moved or missing schema
+ * file surfaces when the schema is actually read, not at import time (ops#30).
+ */
+export function getClaimSchema(): JsonSchema {
+  return (claimSchemaCache ??= loadHachureSchema("claim"));
+}
+
+/** The published Hachure `trust-bundle` schema (read from disk, memoized on first use). */
+export function getTrustBundleSchema(): JsonSchema {
+  return (trustBundleSchemaCache ??= loadHachureSchema("trust-bundle"));
+}
 
 /** Issue describing why a claim's freshness fields are not Hachure-valid. */
 export interface ValidationIssue {

@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  claimSchema,
-  trustBundleSchema,
+  getClaimSchema,
+  getTrustBundleSchema,
   validateClaimFreshness,
   runIdFromSource,
   EphemerisScheduler,
@@ -10,6 +10,10 @@ import {
   InMemoryStore,
   RecordingTrigger,
 } from "../../dist/index.js";
+
+// Resolve the lazily-loaded schemas once for the assertions below (ops#30).
+const claimSchema = getClaimSchema();
+const trustBundleSchema = getTrustBundleSchema();
 
 test("read-model is pinned to the published Hachure claim schema", () => {
   // The fields Ephemeris reads must exist in Hachure's claim schema with the
