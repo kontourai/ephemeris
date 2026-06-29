@@ -40,6 +40,13 @@ export type CoalesceReason =
   | "superseded"; // a newer deadline for the same claim is already pending
 
 /**
+ * `setTimeout`'s maximum delay (2^31-1 ms, ~24.8 days). Node clamps any larger
+ * delay down to 1ms (with a `TimeoutOverflowWarning`), so Ephemeris caps the
+ * delay and chains a fresh timer for the remainder — see `#scheduleTimer`.
+ */
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
+
+/**
  * EphemerisScheduler — the core. It turns time into triggers and nothing else.
  *
  * Invariants enforced here:
@@ -317,9 +324,27 @@ export class EphemerisScheduler {
     if (this.#clock instanceof ManualClock) return;
     const key = deadlineKey(deadline);
     if (this.#timers.has(key)) return;
-    const delay = Math.max(0, deadline.fireAt - this.#clock.now());
+    this.#scheduleTimer(key, deadline);
+  }
+
+  /**
+   * Arm (or re-arm) a real timer for `deadline`. A delay above
+   * `MAX_TIMER_DELAY_MS` would be clamped to 1ms by Node and fire almost
+   * immediately; that early tick finds nothing due and — because the key stays in
+   * `#timers` — the deadline would never re-arm and so never fire on its own
+   * timer. Cap the delay and, when a capped timer fires before the real instant,
+   * chain a fresh timer for the remainder.
+   */
+  #scheduleTimer(key: string, deadline: ArmedDeadline): void {
+    const remaining = deadline.fireAt - this.#clock.now();
+    const delay = Math.min(Math.max(0, remaining), MAX_TIMER_DELAY_MS);
     const t = setTimeout(() => {
-      void this.tick();
+      this.#timers.delete(key);
+      if (this.#clock.now() < deadline.fireAt) {
+        this.#scheduleTimer(key, deadline); // capped timer fired early — re-arm
+      } else {
+        void this.tick();
+      }
     }, delay);
     // Don't keep the process alive solely for a pending timer in library use.
     if (typeof t.unref === "function") t.unref();

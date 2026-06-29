@@ -1,6 +1,7 @@
 import {
   readFileSync,
   writeFileSync,
+  renameSync,
   appendFileSync,
   mkdirSync,
   existsSync,
@@ -153,7 +154,16 @@ export class JsonFileStore implements Store {
     if (!existsSync(this.#path)) return;
     const raw = readFileSync(this.#path, "utf8").trim();
     if (raw === "") return;
-    const data = JSON.parse(raw) as PersistShape;
+    let data: PersistShape;
+    try {
+      data = JSON.parse(raw) as PersistShape;
+    } catch {
+      // A truncated/torn file (e.g. a crash mid-write before the atomic rename
+      // landed) must not crash boot. Degrade to empty state — the next #flush
+      // rewrites a clean file — mirroring how AppendLogStore tolerates a torn
+      // trailing line rather than throwing on load.
+      return;
+    }
     for (const key of data.fired ?? []) this.#fired.add(key);
     for (const d of data.pending ?? []) {
       const key = deadlineKey(d);
@@ -168,7 +178,12 @@ export class JsonFileStore implements Store {
       fired: [...this.#fired],
     };
     mkdirSync(dirname(this.#path), { recursive: true });
-    writeFileSync(this.#path, JSON.stringify(data, null, 2), "utf8");
+    // Write to a temp file then atomically rename so a crash mid-write can never
+    // leave a half-written (unparseable) file at #path. rename(2) is atomic on
+    // POSIX, so a reader sees either the old complete file or the new one.
+    const tmp = `${this.#path}.tmp`;
+    writeFileSync(tmp, JSON.stringify(data, null, 2), "utf8");
+    renameSync(tmp, this.#path);
   }
 }
 
