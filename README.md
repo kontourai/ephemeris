@@ -1,5 +1,12 @@
 # Ephemeris
 
+> **Status: FROZEN (2026-07-02)** — development on this repo is paused. The
+> freshness-trigger capability documented below is being folded into
+> [Kontour Flow](https://github.com/kontourai/flow) as a Flow module; see
+> [kontourai/flow#99](https://github.com/kontourai/flow/issues/99) for the
+> fold-in tracking issue. This package is not published to npm. Do not build
+> new dependencies on this repo.
+
 **External freshness scheduler / event-bridge for the Kontour suite.**
 Status: v0.3 · Layer: time actor.
 
