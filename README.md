@@ -31,7 +31,7 @@ or process authority.
 
 ## Why it exists
 
-`docs/design/route-back-cascade-and-trust-recursion.md` Decision #1 resolved that
+In kontourai/flow's `docs/design/route-back-cascade-and-trust-recursion.md`, Decision #1 resolved that
 **neither Surface nor Flow has a scheduler.** Flow's only clock is the `now`
 captured at an `evaluateRun` that some *external* actor triggers. A claim that
 expires at 2am is only *observed* at the next externally-invoked evaluation.
@@ -184,7 +184,7 @@ import {
   DirectoryWatcherSource, RegistrySource, SchedulerSink,
   TrustBundleReadModel, ClaimReadModel, ArmedDeadline,
   deadlineKey, claimKey, runIdFromSource, HACHURE,
-  validateClaimFreshness, claimSchema, trustBundleSchema,
+  validateClaimFreshness, getClaimSchema, getTrustBundleSchema,
   deriveFireAt,
 } from "@kontourai/ephemeris";
 ```
@@ -199,7 +199,7 @@ names and types exactly, and are validated against them at ingest.
 ```bash
 npm install
 npm run build      # tsc
-npm test           # build + node --test (34 tests, fully deterministic, no sleeps)
+npm test           # build + node --test (fully deterministic, no sleeps)
 npm run example    # arm a claim that expires shortly, advance a ManualClock, fire once
 ```
 
