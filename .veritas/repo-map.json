@@ -66,6 +66,14 @@
         ]
       },
       {
+        "id": "product.additional-areas",
+        "kind": "product-area",
+        "label": "Additional repository product areas",
+        "patterns": [
+          "examples/"
+        ]
+      },
+      {
         "id": "delivery.workflows",
         "kind": "delivery-area",
         "label": ".github/**",

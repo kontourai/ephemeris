@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "run_id": "independent-rollout-verification-ephemeris",
+  "authority_settings_id": "ephemeris-default",
+  "mode": "observe",
+  "evidence": {
+    "artifact_path": ".kontourai/veritas/evidence/independent-rollout-verification-ephemeris.json",
+    "artifact_digest": "26f16197341ce134f2c33a0950f73a1431b4cacda8eaf4d8c492bc71e2808785",
+    "timestamp": "2026-07-20T15:13:59.527Z",
+    "source_ref": "origin/main..HEAD",
+    "source_kind": "branch-diff",
+    "source_scope": [
+      "changed-from:origin/main",
+      "changed-to:HEAD"
+    ],
+    "components": [
+      "delivery.workflows",
+      "governance.guidance",
+      "governance.root-manifests"
+    ],
+    "triggered_evidence_checks": [
+      ".github/**",
+      ".veritas/**",
+      "root manifests"
+    ],
+    "unresolved_files": [
+      "veritas.claims.json"
+    ],
+    "policy_results": [
+      {
+        "rule_id": "policy-changes-require-attestation",
+        "classification": "hard-invariant",
+        "enforcementLevel": "Require",
+        "message": "Protected standards changes require a fresh authority-backed attestation.",
+        "owner": "repo-core",
+        "rollback_switch": null,
+        "implemented": true,
+        "passed": true,
+        "status": "pass",
+        "summary": "Active attestation bootstrap-2026-07-20T14-45-10-361Z-644c13b017bb matches current protected standards hashes.",
+        "findings": []
+      },
+      {
+        "rule_id": "required-veritas-artifacts",
+        "classification": "hard-invariant",
+        "enforcementLevel": "Require",
+        "enforcement": "deny",
+        "message": "The bootstrap Veritas artifacts must stay present so agents and reviewers share the same baseline.",
+        "owner": "repo-core",
+        "rollback_switch": null,
+        "implemented": true,
+        "passed": true,
+        "status": "info",
+        "summary": "All required repository artifacts are present.",
+        "findings": []
+      },
+      {
+        "rule_id": "ai-instruction-files-synced",
+        "classification": "hard-invariant",
+        "enforcementLevel": "Guide",
+        "enforcement": "deny",
+        "message": "All required AI tool instruction files must contain the Veritas guidance block.",
+        "owner": "repo-maintainers",
+        "rollback_switch": null,
+        "implemented": true,
+        "passed": false,
+        "status": "info",
+        "summary": "Some AI instruction files are missing the canonical Veritas governance block.",
+        "findings": [
+          {
+            "kind": "stale-governance-block",
+            "artifact": "AGENTS.md"
+          }
+        ]
+      },
+      {
+        "rule_id": "prefer-veritas-routed-delivery",
+        "classification": "promotable-policy",
+        "enforcementLevel": "Observe",
+        "enforcement": "advisory",
+        "message": "Prefer running new AI-guided changes through Veritas readiness checks and the documented evidenceCheck before review.",
+        "owner": "repo-maintainers",
+        "rollback_switch": "soften-veritas-route",
+        "implemented": true,
+        "passed": true,
+        "status": "info",
+        "summary": "All required repository artifacts are present.",
+        "findings": []
+      }
+    ]
+  },
+  "governance": {
+    "protected_standards_touched": true,
+    "classification": "unknown",
+    "human_review_required": false,
+    "changed_paths": [
+      ".veritas/GOVERNANCE.md",
+      ".veritas/authority/default.authority-settings.json",
+      ".veritas/repo-map.json",
+      ".veritas/repo-standards/default.repo-standards.json"
+    ]
+  },
+  "reviewer_confidence_scale": [
+    "low",
+    "medium",
+    "high",
+    "unknown"
+  ],
+  "prefilled_outcome": {
+    "reviewer_confidence": "unknown"
+  },
+  "prefilled_measurements": {
+    "time_to_green_minutes": null,
+    "exception_count": 0,
+    "false_positive_rules": [],
+    "missed_issues": []
+  },
+  "notes": [],
+  "missing_confirmation_fields": [
+    "accepted_without_major_rewrite",
+    "required_followup",
+    "time_to_green_minutes"
+  ]
+}

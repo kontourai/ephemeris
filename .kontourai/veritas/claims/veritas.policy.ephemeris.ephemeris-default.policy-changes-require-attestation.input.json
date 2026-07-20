@@ -1,0 +1,258 @@
+{
+  "schemaVersion": 5,
+  "source": "veritas:independent-rollout-verification-ephemeris",
+  "generatedAt": "2026-07-20T15:13:59.619Z",
+  "claim": {
+    "id": "veritas.policy.ephemeris.ephemeris-default.policy-changes-require-attestation",
+    "facet": "veritas.policy-results",
+    "claimType": "veritas-policy-result",
+    "fieldOrBehavior": "policy-changes-require-attestation",
+    "subjectType": "policy-rule",
+    "subjectId": "ephemeris:ephemeris-default:policy-changes-require-attestation",
+    "impactLevel": "high",
+    "verificationPolicyId": "veritas.policy-result",
+    "metadata": {
+      "projected": true,
+      "ruleId": "policy-changes-require-attestation",
+      "enforcementLevel": "Require",
+      "classification": "hard-invariant",
+      "repoStandards": "ephemeris-default",
+      "repoMap": "ephemeris"
+    },
+    "createdAt": "2026-07-20T15:13:59.527Z",
+    "updatedAt": "2026-07-20T15:13:59.527Z",
+    "value": "policy-changes-require-attestation",
+    "currentIntegrityRef": "origin/main..HEAD"
+  },
+  "evidence": [
+    {
+      "id": "independent-rollout-verification-ephemeris.policy.policy-changes-require-attestation.evidence",
+      "claimId": "veritas.policy.ephemeris.ephemeris-default.policy-changes-require-attestation",
+      "evidenceType": "policy_rule",
+      "method": "validation",
+      "sourceRef": "independent-rollout-verification-ephemeris",
+      "sourceLocator": "policy_results.policy-changes-require-attestation",
+      "excerptOrSummary": "Active attestation bootstrap-2026-07-20T14-45-10-361Z-644c13b017bb matches current protected standards hashes.",
+      "observedAt": "2026-07-20T15:13:59.527Z",
+      "collectedBy": "veritas",
+      "integrityRef": "origin/main..HEAD",
+      "passing": true,
+      "blocking": true,
+      "metadata": {
+        "sourceKind": "branch-diff",
+        "sourceScope": [
+          "changed-from:origin/main",
+          "changed-to:HEAD"
+        ],
+        "files": [
+          ".github/workflows/veritas-advisory.yml",
+          ".veritas/GOVERNANCE.md",
+          ".veritas/README.md",
+          ".veritas/attestations/HEAD",
+          ".veritas/attestations/bootstrap-2026-07-20T14-45-10-361Z-644c13b017bb.attestation.json",
+          ".veritas/authority/default.authority-settings.json",
+          ".veritas/repo-map.json",
+          ".veritas/repo-standards/default.repo-standards.json",
+          "AGENTS.md",
+          "veritas.claims.json"
+        ],
+        "unresolvedFiles": [
+          "veritas.claims.json"
+        ],
+        "integrity": {
+          "sourceRef": "origin/main..HEAD",
+          "sourceKind": "branch-diff",
+          "sourceScope": [
+            "changed-from:origin/main",
+            "changed-to:HEAD"
+          ],
+          "fileRefs": [
+            {
+              "path": ".github/workflows/veritas-advisory.yml",
+              "hash": "sha256:09283f44871d13b37c34720af020fb7aa82e4dd0b932f1f33b362ced49ef4715",
+              "sizeBytes": 1988
+            },
+            {
+              "path": ".veritas/GOVERNANCE.md",
+              "hash": "sha256:1b0520568cf6ff0bf54ab09b0bedd3a02056dd78e6365ffcd0f230f3e8f885a2",
+              "sizeBytes": 978
+            },
+            {
+              "path": ".veritas/README.md",
+              "hash": "sha256:a991b5e31456b8c58f54b4f1fbd40b7c4ba36d5e7f4114d1cc95c3658abb498f",
+              "sizeBytes": 2137
+            },
+            {
+              "path": ".veritas/attestations/HEAD",
+              "hash": "sha256:33f068bc8444b6eb8214d5a885d5023ec1b69d17f8aa6c1597dcd86b163a7e3e",
+              "sizeBytes": 80
+            },
+            {
+              "path": ".veritas/attestations/bootstrap-2026-07-20T14-45-10-361Z-644c13b017bb.attestation.json",
+              "hash": "sha256:e5d69474b460ed216400f46818c4f7f6cbecd4ebe856901be40de915b6c1536e",
+              "sizeBytes": 3623
+            },
+            {
+              "path": ".veritas/authority/default.authority-settings.json",
+              "hash": "sha256:3d86dfc0874088aef6fcc57fbf6af558ae7685d997571248d96ad6c0881e2848",
+              "sizeBytes": 902
+            },
+            {
+              "path": ".veritas/repo-map.json",
+              "hash": "sha256:9b165bec849f6cea702e9a0c5417d1d82be881d4f667a4f705523ceecd0ee114",
+              "sizeBytes": 2673
+            },
+            {
+              "path": ".veritas/repo-standards/default.repo-standards.json",
+              "hash": "sha256:acddbf9496f941dead91e6f532d86854f213afc58364224afe25ac5f99b5d21f",
+              "sizeBytes": 1722
+            },
+            {
+              "path": "AGENTS.md",
+              "hash": "sha256:09222c9c5f8eaa2115fe631d2d475972e3390a6d4beee6ec9ee5a7ba548d985e",
+              "sizeBytes": 1770
+            },
+            {
+              "path": "veritas.claims.json",
+              "hash": "sha256:b20d12e455addf11cd342174e466c8c39c0335c2ee9add4155a0be9d76c042f7",
+              "sizeBytes": 5887
+            }
+          ],
+          "configRefs": {
+            "repoMap": {
+              "name": "ephemeris",
+              "path": ".veritas/repo-map.json",
+              "hash": "sha256:9b165bec849f6cea702e9a0c5417d1d82be881d4f667a4f705523ceecd0ee114"
+            },
+            "repoStandards": {
+              "name": "ephemeris-default",
+              "path": ".veritas/repo-standards/default.repo-standards.json",
+              "hash": "sha256:acddbf9496f941dead91e6f532d86854f213afc58364224afe25ac5f99b5d21f"
+            },
+            "authoritySettings": {
+              "name": "authority-settings",
+              "path": ".veritas/authority/default.authority-settings.json",
+              "hash": "sha256:3d86dfc0874088aef6fcc57fbf6af558ae7685d997571248d96ad6c0881e2848"
+            }
+          }
+        },
+        "fileIntegrity": [
+          {
+            "path": ".github/workflows/veritas-advisory.yml",
+            "hash": "sha256:09283f44871d13b37c34720af020fb7aa82e4dd0b932f1f33b362ced49ef4715",
+            "sizeBytes": 1988
+          },
+          {
+            "path": ".veritas/GOVERNANCE.md",
+            "hash": "sha256:1b0520568cf6ff0bf54ab09b0bedd3a02056dd78e6365ffcd0f230f3e8f885a2",
+            "sizeBytes": 978
+          },
+          {
+            "path": ".veritas/README.md",
+            "hash": "sha256:a991b5e31456b8c58f54b4f1fbd40b7c4ba36d5e7f4114d1cc95c3658abb498f",
+            "sizeBytes": 2137
+          },
+          {
+            "path": ".veritas/attestations/HEAD",
+            "hash": "sha256:33f068bc8444b6eb8214d5a885d5023ec1b69d17f8aa6c1597dcd86b163a7e3e",
+            "sizeBytes": 80
+          },
+          {
+            "path": ".veritas/attestations/bootstrap-2026-07-20T14-45-10-361Z-644c13b017bb.attestation.json",
+            "hash": "sha256:e5d69474b460ed216400f46818c4f7f6cbecd4ebe856901be40de915b6c1536e",
+            "sizeBytes": 3623
+          },
+          {
+            "path": ".veritas/authority/default.authority-settings.json",
+            "hash": "sha256:3d86dfc0874088aef6fcc57fbf6af558ae7685d997571248d96ad6c0881e2848",
+            "sizeBytes": 902
+          },
+          {
+            "path": ".veritas/repo-map.json",
+            "hash": "sha256:9b165bec849f6cea702e9a0c5417d1d82be881d4f667a4f705523ceecd0ee114",
+            "sizeBytes": 2673
+          },
+          {
+            "path": ".veritas/repo-standards/default.repo-standards.json",
+            "hash": "sha256:acddbf9496f941dead91e6f532d86854f213afc58364224afe25ac5f99b5d21f",
+            "sizeBytes": 1722
+          },
+          {
+            "path": "AGENTS.md",
+            "hash": "sha256:09222c9c5f8eaa2115fe631d2d475972e3390a6d4beee6ec9ee5a7ba548d985e",
+            "sizeBytes": 1770
+          },
+          {
+            "path": "veritas.claims.json",
+            "hash": "sha256:b20d12e455addf11cd342174e466c8c39c0335c2ee9add4155a0be9d76c042f7",
+            "sizeBytes": 5887
+          }
+        ],
+        "configIntegrity": {
+          "repoMap": {
+            "name": "ephemeris",
+            "path": ".veritas/repo-map.json",
+            "hash": "sha256:9b165bec849f6cea702e9a0c5417d1d82be881d4f667a4f705523ceecd0ee114"
+          },
+          "repoStandards": {
+            "name": "ephemeris-default",
+            "path": ".veritas/repo-standards/default.repo-standards.json",
+            "hash": "sha256:acddbf9496f941dead91e6f532d86854f213afc58364224afe25ac5f99b5d21f"
+          },
+          "authoritySettings": {
+            "name": "authority-settings",
+            "path": ".veritas/authority/default.authority-settings.json",
+            "hash": "sha256:3d86dfc0874088aef6fcc57fbf6af558ae7685d997571248d96ad6c0881e2848"
+          }
+        },
+        "enforcementLevel": "Require",
+        "classification": "hard-invariant",
+        "implemented": true,
+        "passed": true,
+        "transparencyGapHints": []
+      }
+    }
+  ],
+  "events": [
+    {
+      "id": "independent-rollout-verification-ephemeris.policy.policy-changes-require-attestation.verified",
+      "claimId": "veritas.policy.ephemeris.ephemeris-default.policy-changes-require-attestation",
+      "status": "verified",
+      "actor": "veritas",
+      "method": "requirements evaluation",
+      "evidenceIds": [
+        "independent-rollout-verification-ephemeris.policy.policy-changes-require-attestation.evidence"
+      ],
+      "createdAt": "2026-07-20T15:13:59.527Z",
+      "verifiedAt": "2026-07-20T15:13:59.527Z",
+      "notes": "Protected standards changes require a fresh authority-backed attestation."
+    }
+  ],
+  "policy": {
+    "id": "veritas.policy-result",
+    "claimType": "veritas-policy-result",
+    "requiredEvidence": [
+      "policy_rule"
+    ],
+    "requiredMethods": [
+      "validation"
+    ],
+    "requiresCorroboration": false,
+    "acceptanceCriteria": [
+      "requirements evaluation"
+    ],
+    "reviewAuthority": "veritas requirements",
+    "validityRule": {
+      "kind": "commit"
+    },
+    "stalenessTriggers": [
+      "source_ref changes",
+      "Repo Standards changes",
+      "requirement implementation changes"
+    ],
+    "conflictRules": [
+      "blocking failed requirements reject the affected claim"
+    ],
+    "impactLevel": "high"
+  }
+}
