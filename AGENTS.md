@@ -28,3 +28,8 @@
 - Preserve the invariant that it triggers Flow and never authors TrustBundles, ledgers, `fresh`, `stale`, or `revoked` state.
 - Reuse README vocabulary for Hachure, Surface, Flow, Store, Source, Trigger, and deadlines.
 - Keep docs-only interface work limited to `AGENTS.md` and `CONTEXT.md` unless the task explicitly calls for more.
+
+<!-- veritas:governance-block:start -->
+This repo uses Veritas for AI governance. Read `.veritas/GOVERNANCE.md` before making changes.
+After changes, run `npm exec --yes --package=@kontourai/veritas@1.5.2 -- veritas readiness` and address any FAIL lines before finishing.
+<!-- veritas:governance-block:end -->
