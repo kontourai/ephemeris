@@ -4,5 +4,4 @@ dist/
 .DS_Store
 .ephemeris/
 *.local.json
-.surface/
 .kontourai/
