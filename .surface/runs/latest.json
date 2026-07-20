@@ -1,8 +1,0 @@
-{
-  "schemaVersion": 1,
-  "kind": "surface-console-index",
-  "latestRunId": "independent-rollout-verification-ephemeris",
-  "readModelPath": ".surface/runs/independent-rollout-verification-ephemeris.console.json",
-  "evidenceArtifactPath": ".kontourai/veritas/evidence/independent-rollout-verification-ephemeris.json",
-  "updatedAt": "2026-07-20T15:13:59.527Z"
-}
