@@ -209,6 +209,21 @@ interface ParsedCron {
 }
 
 /**
+ * Parse a cron field token as a strict non-negative decimal integer. Rejects
+ * anything `Number()` would coerce but Vixie cron does not accept (hex
+ * `0x10`, scientific `1e1`, surrounding whitespace). A separate range/range-step
+ * check enforces `min`/`max` and ordering on the result.
+ */
+function parseStrictInt(token: string, spec: string): number {
+  if (!/^\d+$/.test(token)) {
+    throw new Error(
+      `cron value "${token}" in "${spec}" is not a decimal integer`,
+    );
+  }
+  return Number(token);
+}
+
+/**
  * Parse one cron field into a {@link CronField}. Throws on malformed syntax or
  * out-of-range values. `min`/`max` are inclusive.
  */
@@ -241,20 +256,14 @@ function parseField(spec: string, min: number, max: number): CronField {
       const dash = rangeText.indexOf("-");
       const a = rangeText.slice(0, dash);
       const b = rangeText.slice(dash + 1);
-      lo = Number(a);
-      hi = Number(b);
-      if (!Number.isInteger(lo) || !Number.isInteger(hi)) {
-        throw new Error(`cron range "${rangeText}" in "${spec}" is not integer`);
-      }
+      lo = parseStrictInt(a, spec);
+      hi = parseStrictInt(b, spec);
     } else {
-      lo = Number(rangeText);
-      if (!Number.isInteger(lo)) {
-        throw new Error(`cron value "${rangeText}" in "${spec}" is not integer`);
-      }
+      lo = parseStrictInt(rangeText, spec);
       hi = lo;
     }
-    const step = stepText === null ? 1 : Number(stepText);
-    if (!Number.isInteger(step) || step <= 0) {
+    const step = stepText === null ? 1 : parseStrictInt(stepText, spec);
+    if (step <= 0) {
       throw new Error(`cron step "${stepText}" in "${spec}" must be a positive integer`);
     }
     if (lo < min || lo > max || hi < min || hi > max) {
@@ -407,15 +416,15 @@ function wallParts(msUtc: number, timeZone: string): WallParts {
  * adjacent instants. Two specific sub-cases:
  *   - **Spring-forward gap:** a wall-clock that does not exist (e.g. 02:30 on a
  *     "spring forward at 02:00 → 03:00" day) has no UTC instant; this function
- *     returns the instant whose wall parts match the target's *minute* most
- *     closely, but the wall-clock will not equal the target. A cron schedule
- *     that points into a gap is undefined per Vixie cron too; callers should
- *     avoid gap times.
+ *     returns the nearest real instant, whose wall parts will NOT reproduce the
+ *     target. Callers that need a true match must round-trip verify via
+ *     `wallParts(result, timeZone)` and reject on mismatch — `nextCronOccurrence`
+ *     does this so cron evaluation never fires at a non-matching local time.
  *   - **Fall-back fold:** a wall-clock that occurs twice (e.g. 01:30 on a
  *     "fall back at 03:00 → 02:00" day) maps to two UTC instants; this function
- *     returns one of them (the first to converge). For cron evaluation the
- *     distinction is immaterial — the schedule still fires exactly once per
- *     wall-clock occurrence.
+ *     returns one of them (the first to converge). Both project back to the same
+ *     wall parts, so a round-trip check passes and the schedule fires exactly
+ *     once per wall-clock occurrence.
  *
  * These edge cases affect only the two DST transition instants per year; the
  * common case (a cron firing daily or hourly at some local time) is exact, as
@@ -523,12 +532,31 @@ function nextCronOccurrence(
       continue;
     }
 
-    // All fields match: convert this wall-clock instant back to UTC and verify
-    // the strict-after contract (a same-minute match just after `fromMs` would
-    // otherwise let a stale instant slip through).
+    // All fields match: convert this wall-clock instant back to UTC. Two
+    // checks must pass before we accept it as a true fire:
+    //   1. Strict-after contract (utc > fromMs): a same-minute match just after
+    //      `fromMs` could otherwise let a stale instant slip through.
+    //   2. Wall-parts round trip: in a spring-forward gap the target wall time
+    //      does not exist, so wallToUtcMs returns the *nearest* real instant —
+    //      whose wall parts differ from the target. Reject it so we never fire
+    //      at a non-matching local time. Fold times (fall-back) project both
+    //      instants to the same wall parts, so this check passes and the
+    //      schedule still fires exactly once per wall-clock occurrence.
     const utc = wallToUtcMs(year, month0, day, hour, minute, timeZone);
-    if (utc > fromMs) return utc;
-    // DST-boundary fallback: advance one wall-clock minute and re-search.
+    const rt = wallParts(utc, timeZone);
+    if (
+      utc > fromMs &&
+      rt.year === year &&
+      rt.month0 === month0 &&
+      rt.day === day &&
+      rt.hour === hour &&
+      rt.minute === minute
+    ) {
+      return utc;
+    }
+    // Stale instant or non-existent gap time: advance one wall-clock minute and
+    // re-search. The gap is bounded (one local hour per year per zone), so the
+    // walk terminates and normal matching resumes once past it.
     wall.setUTCMinutes(minute + 1, 0, 0);
   }
   return null;

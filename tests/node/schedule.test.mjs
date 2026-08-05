@@ -79,6 +79,15 @@ test("missedCount: caps at 1000 for an absurd interval", () => {
   assert.equal(missedCount(sched, 0, 100_000_000), 1000);
 });
 
+test("missedCount: cron caps at 1000 over a large window", () => {
+  // Every-minute cron over a ~3.8-year window — far above the cap. Iterates
+  // nextOccurrence up to CAP times and stops there.
+  const sched = { kind: "cron", expr: "* * * * *" };
+  const from = utc(2020, 1, 1, 0, 0, 0);
+  const to = from + 2_000_000 * 60_000;
+  assert.equal(missedCount(sched, from, to), 1000);
+});
+
 test("missedCount: counts strictly-intervening occurrences for every", () => {
   const sched = { kind: "every", everyMs: 30000 };
   const last = utc(2026, 1, 1, 9, 0, 0);
@@ -239,6 +248,87 @@ test("cron DST: a multi-day walk from before through after the boundary stays at
   assert.deepEqual(utcHours, [16, 16, 15, 15, 15, 15]);
 });
 
+test("cron DST: spring-forward gap does not fire at a non-matching local time", () => {
+  // Denver springs forward Mar 8 2026 at 02:00 -> 03:00, so 02:30 does not
+  // exist that day. A naive wall->UTC conversion returns the nearest instant
+  // (01:30); the evaluator must reject it and skip to the next real 02:30.
+  const sched = {
+    kind: "cron",
+    expr: "30 2 * * *",
+    timezone: "America/Denver",
+  };
+  const next = nextOccurrence(sched, utc(2026, 3, 7, 12, 0, 0));
+  // The next real 02:30 Denver is Mar 9 02:30 MDT (UTC-6) = 08:30 UTC.
+  // (Mar 8 02:30 is the gap; the bug returned Mar 8 01:30 = 08:30 UTC Mar 8.)
+  assert.equal(next, utc(2026, 3, 9, 8, 30, 0));
+  // It must project back to 02:30 Denver wall-clock — the whole point.
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Denver",
+    hourCycle: "h23",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const parts = fmt.formatToParts(new Date(next));
+  const g = (t) => parts.find((p) => p.type === t)?.value;
+  assert.equal(
+    `${g("month")}/${g("day")} ${g("hour")}:${g("minute")}`,
+    "03/09 02:30",
+  );
+});
+
+test("cron DST: fall-back fold fires once per wall-clock occurrence (no double-fire)", () => {
+  // Denver falls back Nov 1 2026 at 02:00 -> 01:00, so 01:30 occurs twice
+  // (01:30 MDT then 01:30 MST). The schedule must fire exactly once for that
+  // wall-clock minute, not twice.
+  const sched = {
+    kind: "cron",
+    expr: "30 1 * * *",
+    timezone: "America/Denver",
+  };
+  const fires = nextOccurrences(sched, 3, utc(2026, 10, 31, 12, 0, 0));
+  assert.equal(fires.length, 3);
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Denver",
+    hourCycle: "h23",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const project = (ms) => {
+    const p = fmt.formatToParts(new Date(ms));
+    const g = (t) => p.find((x) => x.type === t)?.value;
+    return `${g("month")}/${g("day")} ${g("hour")}:${g("minute")}`;
+  };
+  // Three consecutive days at 01:30 wall-clock; Nov 1 appears exactly once.
+  assert.deepEqual(project(fires[0]), "11/01 01:30");
+  assert.deepEqual(project(fires[1]), "11/02 01:30");
+  assert.deepEqual(project(fires[2]), "11/03 01:30");
+});
+
+test("cron OR: DOM-restricted + DOW-restricted fires when only one side matches", () => {
+  // 0 9 15 * 1 = 09:00 on day-of-month 15 OR Monday. With both fields
+  // restricted, Vixie OR-semantics fire a day where EITHER matches.
+  const sched = { kind: "cron", expr: "0 9 15 * 1" };
+  // Jan 5 2026 is a Monday (weekday 1) but not the 15th -> fires via DOW.
+  // Jan 15 2026 is a Thursday (weekday 4) -> fires via DOM.
+  const fires = nextOccurrences(sched, 4, utc(2026, 1, 1, 0, 0, 0));
+  assert.deepEqual(fires, [
+    utc(2026, 1, 5, 9, 0, 0), // Mon (DOW hit, DOM miss)
+    utc(2026, 1, 12, 9, 0, 0), // Mon (DOW hit, DOM miss)
+    utc(2026, 1, 15, 9, 0, 0), // Thu (DOM hit, DOW miss)
+    utc(2026, 1, 19, 9, 0, 0), // Mon (DOW hit, DOM miss)
+  ]);
+});
+
+test("cron tz: 45-minute-offset zone (Asia/Kathmandu UTC+5:45) resolves correctly", () => {
+  const sched = { kind: "cron", expr: "0 9 * * *", timezone: "Asia/Kathmandu" };
+  // From 2026-01-01 00:00 UTC, the next 09:00 Kathmandu = 03:15 UTC same day.
+  assert.equal(nextOccurrence(sched, utc(2026, 1, 1, 0, 0, 0)), utc(2026, 1, 1, 3, 15, 0));
+});
+
 // ---------------------------------------------------------------------------
 // validateSchedule
 // ---------------------------------------------------------------------------
@@ -258,6 +348,10 @@ test("validateSchedule: rejects malformed cron and invalid fields", () => {
   assert.ok(validateSchedule({ kind: "cron", expr: "abc 9 * * *" }));
   // Zero step.
   assert.ok(validateSchedule({ kind: "cron", expr: "*/0 9 * * *" }));
+  // Non-decimal integers that Number() would coerce (hex, scientific) — Vixie
+  // cron accepts only decimal digits.
+  assert.ok(validateSchedule({ kind: "cron", expr: "0x10 9 * * *" }));
+  assert.ok(validateSchedule({ kind: "cron", expr: "1e1 9 * * *" }));
 });
 
 test("validateSchedule: rejects unknown timezone", () => {
@@ -348,6 +442,10 @@ test("purity: src/schedule.ts is free of Date.now() and timers", () => {
   assert.ok(
     !stripped.includes("setInterval"),
     "schedule.ts must not use setInterval",
+  );
+  assert.ok(
+    !stripped.includes("setImmediate"),
+    "schedule.ts must not use setImmediate",
   );
   // `new Date()` with no argument reads the wall clock and is therefore banned;
   // `new Date(ms)` is a pure conversion and is allowed.
