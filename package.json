@@ -3,6 +3,10 @@
   "version": "0.4.0",
   "description": "Kontour's external time actor: a deadline engine (data-derived freshness wake-ups that nudge Flow) plus a pure recurring-schedule core (cron/at/every, timezone/DST-aware, catch-up). It triggers; it never authors.",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kontourai/ephemeris"
+  },
   "type": "module",
   "bin": {
     "ephemeris": "dist/cli.js"
@@ -31,6 +35,9 @@
   },
   "keywords": [
     "scheduler",
+    "cron",
+    "timezone",
+    "dst",
     "freshness",
     "expiry",
     "ttl",
