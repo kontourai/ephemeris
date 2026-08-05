@@ -57,3 +57,20 @@ export type {
   JsonSchemaProperty,
   ValidationIssue,
 } from "./hachure-schema.js";
+
+// Recurring-schedule evaluation core (pure functions over data)
+export type {
+  Schedule,
+  CronSchedule,
+  AtSchedule,
+  EverySchedule,
+  ScheduledJob,
+  RunRecord,
+} from "./schedule.js";
+export {
+  validateSchedule,
+  nextOccurrence,
+  isOverdue,
+  missedCount,
+  nextOccurrences,
+} from "./schedule.js";
