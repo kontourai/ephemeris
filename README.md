@@ -1,13 +1,18 @@
 # Ephemeris
 
-> **Status: FROZEN (2026-07-02)** — development on this repo is paused. The
-> freshness-trigger capability documented below is being folded into
-> [Kontour Flow](https://github.com/kontourai/flow) as a Flow module; see
-> [kontourai/flow#99](https://github.com/kontourai/flow/issues/99) for the
-> fold-in tracking issue. This package is not published to npm. Do not build
-> new dependencies on this repo.
+> **Status: re-scoped (2026-08-05)** — Ephemeris is the Kontour suite's
+> general **time actor**, not a Flow-internal module. It owns two schedule
+> axes: the **deadline engine** below (data-derived `expiresAt` / `ttlSeconds`
+> wake-ups that nudge Flow) and a pure **recurring-schedule core**
+> (`cron` / one-shot `at` / fixed `every`, timezone- and DST-aware, with
+> catch-up) for consumers such as Station. The re-scope decision is tracked in
+> [#15](https://github.com/kontourai/ephemeris/issues/15); Flow's own
+> deadline-reaction fold remains scoped to the Flow-internal
+> [flow#99](https://github.com/kontourai/flow/issues/99), and Ephemeris is the
+> shared building block both consume via published contract. (The earlier
+> FROZEN notice from 2026-07-02 is superseded.)
 
-**External freshness scheduler / event-bridge for the Kontour suite.**
+**External time actor for the Kontour suite — deadline engine + recurring-schedule core.**
 Status: v0.3 · Layer: time actor.
 
 > *Ephemeris* (n.) — in surveying/GNSS, a table of time-indexed positions that
@@ -29,6 +34,12 @@ trigger**. It:
 That is its whole job. It owns the clock and durable wake-ups; it owns no trust
 or process authority.
 
+> The numbered flow above is the **deadline axis** (Flow-emitted bundles →
+> wake-up → nudge). Ephemeris now also owns a **recurring-schedule axis** — a
+> pure evaluation core (`cron` / `at` / `every` + timezone/DST + catch-up) that
+> consumers like Station build on instead of growing their own clock. See
+> [Recurring-schedule core](#recurring-schedule-core-the-second-axis) below.
+
 ## Why it exists
 
 In kontourai/flow's `docs/design/route-back-cascade-and-trust-recursion.md`, Decision #1 resolved that
@@ -46,7 +57,7 @@ that must not have one. Ephemeris is that external time actor, productized.
 | **Hachure** | the *shape* — the TrustBundle / claim schema (incl. `expiresAt`, `ttlSeconds`). |
 | **Surface** | the *meaning* — derives `fresh` / `stale` from `expiresAt`. |
 | **Flow** | the *reaction* — re-derives at the real `now` on `evaluateRun`; emits artifacts. |
-| **Ephemeris** | the *time* — arms a wake-up off a deadline and nudges Flow when it passes. |
+| **Ephemeris** | the *time* — two axes: arms wake-ups off data-derived deadlines and nudges Flow when they pass; and evaluates recurring wall-clock schedules (`cron` / `at` / `every`, tz/DST-aware) as a pure core for consumers like Station. |
 
 Ephemeris is the same edge-adapter shape as Flow's `HostedConsoleSink`: both
 consume Flow's neutral emitted bundle and translate it outward, while Flow stays
@@ -140,6 +151,68 @@ tests).
    - `JsonFileStore` stays the simple **no-config default**; `InMemoryStore`
      stays the test store. (`src/store.ts`)
 
+## Recurring-schedule core (the second axis)
+
+Alongside the deadline engine, Ephemeris ships a **pure recurring-schedule
+evaluation core** (`src/schedule.ts`). It computes *when* a schedule fires; it
+does **not** fire anything itself — the consumer owns firing, storage, and the
+job record's lifecycle. This is the deliberate counterpart to the deadline
+engine's "it triggers, it never authors" invariant: the schedule core evaluates,
+it never authors.
+
+The core answers four questions for a `ScheduledJob`:
+
+- `nextOccurrence(job, nowMs)` — the next fire instant strictly after `nowMs`
+  (DST-aware for cron), or `null` when a one-shot `at` is spent or no cron match
+  exists within ~one year.
+- `isOverdue(job, nowMs)` — `true` when a fire was due before `nowMs` and has
+  not been recorded in `lastRunMs`. Disabled jobs are never overdue.
+- `missedCount(job, nowMs)` — how many fires were missed in
+  `(lastRunMs, nowMs]`, capped at 1000 (a count at the cap means "many"; the cap
+  also bounds work for pathologically small `every` intervals).
+- `nextOccurrences(job, nowMs, n)` — a preview of the next `n` fire times, or
+  fewer when the schedule is spent.
+
+`validateSchedule(schedule)` returns `null` on a well-formed schedule or a
+human-readable error string otherwise (malformed cron, out-of-range fields,
+unknown timezone, non-positive `everyMs`).
+
+**Kinds.** `Schedule` is a discriminated union:
+
+- `cron` — Vixie-cron 5-field expression (`minute hour dom month dow`), with an
+  optional IANA `timezone`. When a timezone is set, the cron fires at the given
+  **local wall-clock** fields, so the UTC offset shifts across DST while the
+  local time stays constant. DOM/DOW OR-semantics apply when both are
+  restricted; a step expression (`0-30/15`) is not a wildcard for that rule.
+- `at` — a one-shot at a fixed epoch instant (`timeMs`); inert after it fires.
+  `deleteAfterRun` is an advisory hint to the consumer.
+- `every` — a fixed interval anchored to the job's own run history
+  (`fromMs + everyMs`), so drift across restarts is impossible.
+
+**DST and purity.** Wall-clock cron is evaluated through `Intl.DateTimeFormat`
+(no new dependencies); DST transitions are handled by walking candidate minutes
+and reading local parts, with a fall-back/fall-forward probe for the ambiguous
+and skipped hours. The core is **pure**: it takes `nowMs` as an argument and
+contains no `Date.now()` and no timers in executable code (a test strips
+comments and asserts this). Deterministic testing therefore needs no `Clock`
+shim — pass any `nowMs`.
+
+**Catch-up.** A job that falls behind (host down, long stall) reports its
+`missedCount` so the consumer can decide whether to fire once, fire the tail, or
+just record the gap. The consumer writes a durable `RunRecord`
+(`firedAtMs` / `scheduledForMs` / `missedCount` / `durationMs` / `success` /
+`outputRef`) — a **type only**: Ephemeris does not store these, matching how
+`Store` is kept separate from the deadline engine. This `RunRecord` is the
+intended receipt substrate for
+[station#1889](https://github.com/kontourai/station/issues/1889).
+
+**Why a pure core, not an executor.** Ephemeris's boundary is time, not
+orchestration. Stations / `boo`-TS / Flow Agents each own their own executor,
+persistence, and job lifecycle; they share this one evaluation core so no
+product grows its own clock. The first consumer is
+[station#1940](https://github.com/kontourai/station/issues/1940) (rebase
+`BuiltinScheduler`).
+
 ## v0.2 architecture (decided defaults)
 
 - **Stack:** TypeScript, Node ESM (`>=22`), `node --test`. Mirrors Flow's
@@ -186,6 +259,10 @@ import {
   deadlineKey, claimKey, runIdFromSource, HACHURE,
   validateClaimFreshness, getClaimSchema, getTrustBundleSchema,
   deriveFireAt,
+  // Recurring-schedule evaluation core (pure functions over data)
+  Schedule, CronSchedule, AtSchedule, EverySchedule,
+  ScheduledJob, RunRecord,
+  validateSchedule, nextOccurrence, isOverdue, missedCount, nextOccurrences,
 } from "@kontourai/ephemeris";
 ```
 
