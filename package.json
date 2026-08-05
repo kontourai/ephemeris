@@ -1,6 +1,6 @@
 {
   "name": "@kontourai/ephemeris",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Kontour's external time actor: a deadline engine (data-derived freshness wake-ups that nudge Flow) plus a pure recurring-schedule core (cron/at/every, timezone/DST-aware, catch-up). It triggers; it never authors.",
   "license": "Apache-2.0",
   "repository": {
@@ -56,7 +56,7 @@
     "hachure": "^0.5.1"
   },
   "peerDependencies": {
-    "@kontourai/flow": "^1.4.0"
+    "@kontourai/flow": ">=1.4.0"
   },
   "peerDependenciesMeta": {
     "@kontourai/flow": {
