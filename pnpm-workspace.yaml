@@ -1,0 +1,23 @@
+# Dependency install scripts are blocked by default (pnpm >= 10). Only the
+# packages listed here, at exactly these versions, may run a build script.
+# Nothing in this dependency tree needs one. Bump the pin with the dep.
+allowBuilds: {}
+
+# @kontourai/flow is an OPTIONAL peer (loaded lazily at runtime, never needed
+# to build or test). npm never installed it; pnpm's default would resolve the
+# root project's peers into the lockfile and pull its whole transitive tree
+# into every install. Keep the dev tree identical to what npm produced.
+autoInstallPeers: false
+
+# A newly published version must be at least 24 hours old before it can be
+# resolved into this lockfile. Blunts the most common supply-chain shape (a
+# compromised maintainer publishes and the ecosystem installs within hours).
+# Does not affect installs from an existing lockfile. An urgent security patch
+# is opted in explicitly, by name and version, with the reason in the commit:
+#   minimumReleaseAgeExclude:
+#     - some-package@1.2.3
+minimumReleaseAge: 1440
+
+# mise supplies node and pnpm on developer machines; CI installs the exact
+# version pinned in package.json. Do not reject a same-major pnpm from mise.
+pmOnFail: ignore

@@ -24,10 +24,13 @@ jobs:
         node-version: ['22', '24']
     steps:
       - uses: actions/checkout@v6
+      # Reads the exact pnpm version from package.json's packageManager field.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
       - run: npm run typecheck
       - run: npm test
       - run: npm pack --dry-run
