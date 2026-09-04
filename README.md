@@ -274,7 +274,7 @@ names and types exactly, and are validated against them at ingest.
 ## Quick start
 
 ```bash
-npm install
+pnpm install
 npm run build      # tsc
 npm test           # build + node --test (fully deterministic, no sleeps)
 npm run example    # arm a claim that expires shortly, advance a ManualClock, fire once
