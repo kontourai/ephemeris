@@ -6,6 +6,7 @@
 - Full project behavior and public API: `README.md`.
 - Agent-facing repo instructions: `AGENTS.md`.
 - Broad verification: `npm test`.
+- Published docs: built with docs-kit. `docs-kit.json` lists the published docs and MCP topics, and `npm run docs:check` is the gate. When you change code that a document `covers`, update that document.
 
 ## Match Checks To Change Type
 

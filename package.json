@@ -31,7 +31,9 @@
     "test": "npm run build && node --test tests/node/*.test.mjs",
     "test:node": "node --test tests/node/*.test.mjs",
     "example": "npm run build && node dist/../examples/demo.mjs",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "docs:check": "npx -y github:kontourai/docs-kit#3c9cf686ddfe0baf14862748db04e661607f8d9a docs-kit check",
+    "docs:build": "npx -y github:kontourai/docs-kit#3c9cf686ddfe0baf14862748db04e661607f8d9a docs-kit build"
   },
   "keywords": [
     "scheduler",

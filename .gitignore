@@ -5,3 +5,4 @@ dist/
 .ephemeris/
 *.local.json
 .kontourai/
+dist-pages/
