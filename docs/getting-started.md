@@ -133,8 +133,12 @@ by default (`firedRetentionMs`); after that, re-arming a long-past deadline can
 fire it again, which is harmless because a fire is only a nudge.
 
 **Fires are being skipped.** With `minFireIntervalMs` (or `--min-fire-interval`)
-above `0`, a fire for the same claim inside that window is dropped. Pass an
-`onCoalesced` callback to the scheduler to observe each skipped fire and why.
+above `0`, a fire for the same claim inside that window is dropped. The drop is
+permanent: the deadline counts as fired and is never retried or caught up
+later, so the claim is not nudged again until it is re-armed with a new
+deadline or another fire is allowed. This is by design, because a fire is only
+a nudge. Pass an `onCoalesced` callback to the scheduler to observe each
+skipped fire and why.
 
 **Trigger errors.** A failed Flow call does not stop the daemon. By default the
 error is logged to stderr as `[ephemeris] trigger failed for ...`. Pass
