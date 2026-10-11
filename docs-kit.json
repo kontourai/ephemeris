@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "product": "ephemeris",
+  "title": "Ephemeris",
+  "tagline": "The Kontour time actor: deadline wake-ups that nudge Flow, plus a pure cron/at/every schedule core",
+  "repo": "kontourai/ephemeris",
+  "landing": "README.md",
+  "documents": [
+    { "source": "docs/getting-started.md", "section": "Start Here" },
+    { "source": "docs/concepts.md", "section": "Concepts" },
+    { "source": "CONTEXT.md", "section": "Concepts", "title": "Domain context and vocabulary" },
+    {
+      "source": "docs/reference.md",
+      "section": "Reference",
+      "covers": ["src/cli.ts", "src/index.ts"]
+    },
+    { "source": "AGENTS.md", "section": "Contribute", "title": "Contributing" }
+  ],
+  "topics": [
+    { "id": "layer-model", "title": "Where Ephemeris sits in the Kontour layer model", "source": "docs/concepts.md#the-kontour-layer-model" },
+    { "id": "invariants", "title": "Invariants: triggers, never authors", "source": "docs/concepts.md#invariants" },
+    { "id": "hachure-bundles", "title": "How Ephemeris reads Hachure TrustBundles", "source": "docs/concepts.md#how-ephemeris-reads-hachure-bundles" },
+    { "id": "deadlines", "title": "Deadlines, fireAt derivation, and idempotency", "source": "docs/concepts.md#deadlines" },
+    { "id": "backpressure", "title": "Coalescing and rate limiting", "source": "docs/concepts.md#coalescing-and-rate-limiting" },
+    { "id": "recurring-schedules", "title": "Recurring-schedule core: cron, at, every", "source": "docs/concepts.md#schedule-kinds" },
+    { "id": "catch-up", "title": "Scheduled jobs, overdue, and catch-up", "source": "docs/concepts.md#jobs-and-catch-up" },
+    { "id": "watch-cli", "title": "ephemeris watch command and options", "source": "docs/reference.md#ephemeris-watch" },
+    { "id": "scheduler-api", "title": "EphemerisScheduler options and methods", "source": "docs/reference.md#ephemerisscheduler" },
+    { "id": "flow-triggers", "title": "Triggers and Flow runners (evaluateRun integration)", "source": "docs/reference.md#triggers-and-flow-runners" },
+    { "id": "stores", "title": "Stores: InMemory, JsonFile, AppendLog", "source": "docs/reference.md#stores" },
+    { "id": "sources", "title": "Sources: directory watcher and registry", "source": "docs/reference.md#sources" },
+    { "id": "schedule-api", "title": "Schedule functions: validateSchedule, nextOccurrence, isOverdue, missedCount", "source": "docs/reference.md#schedule-functions" },
+    { "id": "troubleshooting", "title": "Troubleshooting", "source": "docs/getting-started.md#troubleshooting" }
+  ],
+  "exclude": []
+}

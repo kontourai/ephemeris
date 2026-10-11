@@ -160,18 +160,20 @@ job record's lifecycle. This is the deliberate counterpart to the deadline
 engine's "it triggers, it never authors" invariant: the schedule core evaluates,
 it never authors.
 
-The core answers four questions for a `ScheduledJob`:
+The core answers four questions. Only `isOverdue` takes a `ScheduledJob`; the
+others take the `Schedule` itself and explicit instants:
 
-- `nextOccurrence(job, nowMs)` — the next fire instant strictly after `nowMs`
-  (DST-aware for cron), or `null` when a one-shot `at` is spent or no cron match
-  exists within ~one year.
-- `isOverdue(job, nowMs)` — `true` when a fire was due before `nowMs` and has
+- `nextOccurrence(schedule, fromMs)` — the next fire instant strictly after
+  `fromMs` (DST-aware for cron), or `null` when a one-shot `at` is spent or no
+  cron match exists within ~one year.
+- `isOverdue(job, nowMs)` — `true` when a fire was due at or before `nowMs` and has
   not been recorded in `lastRunMs`. Disabled jobs are never overdue.
-- `missedCount(job, nowMs)` — how many fires were missed in
-  `(lastRunMs, nowMs]`, capped at 1000 (a count at the cap means "many"; the cap
-  also bounds work for pathologically small `every` intervals).
-- `nextOccurrences(job, nowMs, n)` — a preview of the next `n` fire times, or
-  fewer when the schedule is spent.
+- `missedCount(schedule, fromMs, toMs)` — how many fires were missed strictly
+  inside `(fromMs, toMs)` (an on-time fire counts 0), capped at 1000 (a count at
+  the cap means "many"; the cap also bounds work for pathologically small
+  `every` intervals).
+- `nextOccurrences(schedule, count, fromMs)` — a preview of the next `count`
+  fire times, or fewer when the schedule is spent.
 
 `validateSchedule(schedule)` returns `null` on a well-formed schedule or a
 human-readable error string otherwise (malformed cron, out-of-range fields,
