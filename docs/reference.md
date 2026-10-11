@@ -23,7 +23,7 @@ command.
 | `--store <path>` | `.ephemeris/wakeups.json` | Path of the durable store file. |
 | `--store-mode <mode>` | `json` | `appendlog` uses `AppendLogStore`. Any other value uses `JsonFileStore`. |
 | `--compact-threshold <n>` | `1000` | Records appended before `AppendLogStore` compacts. Used only with `--store-mode appendlog`. |
-| `--min-fire-interval <ms>` | `0` | Minimum milliseconds between fires for the same claim. `0` disables rate limiting. |
+| `--min-fire-interval <ms>` | `0` | Minimum milliseconds between fires for the same claim. `0` disables rate limiting, and so does a non-numeric value. |
 | `--flow-mode <mode>` | `programmatic` | `cli` runs `<flow-cmd> evaluate <runId>`. Any other value imports `@kontourai/flow` and calls `evaluateRun`. |
 | `--flow-cmd <cmd>` | `flow` | Executable used with `--flow-mode cli`. |
 | `--cwd <path>` | none | Working directory passed to Flow: the `cwd` option of `evaluateRun`, or the child process's directory in `cli` mode. |
@@ -54,7 +54,7 @@ new EphemerisScheduler(options?: EphemerisSchedulerOptions)
 | Method | Returns | Behaviour |
 | --- | --- | --- |
 | `start()` | `Promise<void>` | Re-arms every pending deadline in the store, then fires any that are due. Call once on boot. |
-| `arm(bundle)` | `ArmedDeadline[]` | Arms each valid claim with a freshness deadline, skipping deadlines already pending or fired and superseding a claim's older pending deadline. Fires any newly armed deadline that is already due. Returns only the deadlines armed by this call. |
+| `arm(bundle)` | `ArmedDeadline[]` | Arms each valid claim with a freshness deadline, skipping deadlines already pending or fired and superseding a claim's older pending deadline. Then fires every pending deadline that is due, including ones armed earlier. Returns only the deadlines armed by this call. |
 | `cancel(bundleSource)` | `void` | Removes the bundle's pending deadlines. Fired history is untouched. |
 | `tick()` | `Promise<void>` | Fires every pending deadline with `fireAt <= now`, each at most once, then awaits the trigger promises. Safe to call repeatedly. |
 | `pendingCount()` | `number` | Number of armed, unfired deadlines. |
@@ -96,7 +96,7 @@ does not parse), else `now + ttlSeconds * 1000` when `ttlSeconds` is set, else
 | Export | Behaviour |
 | --- | --- |
 | `new FlowEvaluateTrigger({ runner? })` | Calls `runner(deadline.runId)`. The default runner is `programmaticFlowRunner()`. |
-| `programmaticFlowRunner({ cwd? })` | On first call, imports `@kontourai/flow` and calls `evaluateRun(runId, { cwd })`. Throws if the module does not export `evaluateRun`. The result is discarded. |
+| `programmaticFlowRunner({ cwd? })` | On each call, dynamically imports `@kontourai/flow` (nothing is imported until the first call) and calls `evaluateRun(runId)`, passing `{ cwd }` as a second argument when `cwd` is set. Rejects if the module does not export `evaluateRun`. The result is discarded. |
 | `cliFlowRunner({ command?, cwd? })` | Spawns `<command> evaluate <runId>` (default command `flow`) with output ignored. Rejects on a spawn error or a non-zero exit. |
 | `new NoopTrigger()` | Does nothing. |
 | `new RecordingTrigger()` | Appends each deadline to its `fired` array. `countFor(keyFn, value)` counts fires whose `keyFn(deadline)` equals `value`. |
@@ -133,7 +133,7 @@ Every store implements `Store`: `pending()`, `has(key)`, `hasFired(key)`,
 | `ArmedDeadline` | type | `{ bundleSource: string; runId: string; claimId: string; fireAt: number }` |
 | `deadlineKey(d)` | function | Deadline identity from `bundleSource`, `claimId`, and `fireAt`. |
 | `claimKey(d)` | function | Per-claim key from `bundleSource` and `claimId`, used for coalescing. |
-| `runIdFromSource(source)` | function | The text after the last `:` of a `flow-run:` source, else `undefined`. |
+| `runIdFromSource(source)` | function | The text after the last `:` of a `flow-run:` source, or `undefined` if the source does not start with `flow-run:` or that text is empty. |
 | `HACHURE` | constant | `runOutputSourcePrefix` (`"flow-run:"`) and lazy `schema.claim` / `schema.trustBundle` getters. |
 
 ## Hachure schema binding
@@ -152,7 +152,7 @@ All of these are pure: every instant is an epoch-millisecond argument.
 
 | Function | Returns |
 | --- | --- |
-| `validateSchedule(schedule)` | `null` if well-formed, else a message for the first problem. Checks that a `cron` has exactly 5 parseable, in-range fields and, if set, a known IANA `timezone` (or `UTC`); that `everyMs` is finite and above 0; and that `timeMs` is finite. It does not check that a cron ever fires. |
+| `validateSchedule(schedule)` | `null` if well-formed, else a message for the first problem. Checks that a `cron` has exactly 5 parseable, in-range fields and, if set, a `timezone` that is `UTC` or listed by `Intl.supportedValuesOf("timeZone")` (canonical names only, so aliases such as `US/Mountain` and `Etc/UTC` are rejected); that `everyMs` is finite and above 0; and that `timeMs` is finite. It does not check that a cron ever fires. |
 | `nextOccurrence(schedule, fromMs)` | The next fire strictly after `fromMs`, or `null`. `cron`: the next matching minute in its timezone, or `null` if none within about one year; throws on a malformed expression. `at`: `timeMs` if it is after `fromMs`, else `null`. `every`: `fromMs + everyMs`. |
 | `isOverdue(job, nowMs)` | Whether `job` should fire now. `false` when `enabled` is `false`. `at`: never run and `timeMs <= nowMs`. `cron` and `every`: the next occurrence after `lastRunMs ?? createdMs` is at or before `nowMs`. |
 | `missedCount(schedule, fromMs, toMs)` | Occurrences strictly between `fromMs` and `toMs`, so an on-time fire counts `0`. Returns `0` when `toMs <= fromMs`, and is capped at 1000. |
@@ -173,4 +173,5 @@ Cron fields follow Vixie cron: minute 0-59, hour 0-23, day-of-month 1-31,
 month 1-12, and day-of-week 0-7, where 0 and 7 are both Sunday. Each field is a
 comma-separated list of values, ranges (`a-b`), stepped ranges (`a-b/n` or
 `*/n`), or `*`. Values must be plain decimal integers; month and weekday names
-are not accepted.
+are not accepted. Unlike Vixie cron, a step on a single value (`5/15`) matches
+only that value.

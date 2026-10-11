@@ -45,7 +45,7 @@ a wake-up for each claim deadline, and fire a trigger when the deadline passes.
 
 ```mermaid
 flowchart LR
-  S[Sources] -->|arm / cancel| E[EphemerisScheduler]
+  S[Sources] -->|arm / cancel| E[Scheduler]
   E <-->|pending and fired| St[Store]
   C[Clock] --> E
   E -->|fire at deadline| T[Trigger]
@@ -66,9 +66,9 @@ Ephemeris reads a small slice of a Flow run-output TrustBundle:
 
 Each claim is checked by `validateClaimFreshness` before arming. `id` must be a
 non-empty string, `expiresAt` a parseable date-time string, and `ttlSeconds` an
-integer of 0 or more. An invalid claim is skipped silently. The constraints are
-read from the schemas the `hachure` package publishes, and a test asserts they
-still match.
+integer of 0 or more. An invalid claim is skipped silently. These constraints
+are written into `validateClaimFreshness` by hand; a test checks that the
+`claim` schema the `hachure` package publishes still agrees with them.
 
 ### Deadlines
 
@@ -96,8 +96,9 @@ both keyed per claim on `(bundleSource, claimId)` (`claimKey`):
   without calling the trigger. `onCoalesced` receives it with the reason
   `"min-interval"`.
 
-Dropping a fire is safe because Flow re-derives at the real `now` on the next
-fire that does go through.
+A dropped fire is not retried: the deadline counts as fired. The design treats
+this as safe because a fire is only a nudge, and Flow re-derives at the real
+`now` whenever it is next evaluated.
 
 ### Sources
 

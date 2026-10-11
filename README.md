@@ -166,7 +166,7 @@ others take the `Schedule` itself and explicit instants:
 - `nextOccurrence(schedule, fromMs)` — the next fire instant strictly after
   `fromMs` (DST-aware for cron), or `null` when a one-shot `at` is spent or no
   cron match exists within ~one year.
-- `isOverdue(job, nowMs)` — `true` when a fire was due before `nowMs` and has
+- `isOverdue(job, nowMs)` — `true` when a fire was due at or before `nowMs` and has
   not been recorded in `lastRunMs`. Disabled jobs are never overdue.
 - `missedCount(schedule, fromMs, toMs)` — how many fires were missed strictly
   inside `(fromMs, toMs)` (an on-time fire counts 0), capped at 1000 (a count at

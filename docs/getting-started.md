@@ -143,6 +143,6 @@ error is logged to stderr as `[ephemeris] trigger failed for ...`. Pass
 **`ephemeris watch` exits with `fatal: ... ENOENT`.** The bundle directory must
 exist before the daemon starts.
 
-**`nextOccurrence` throws for a cron schedule.** A malformed cron expression
-throws. Call `validateSchedule` first and reject schedules that return an error
-string.
+**`nextOccurrence` throws for a cron schedule.** A malformed cron expression or
+an unknown timezone throws. Call `validateSchedule` first and reject schedules
+that return an error string.
