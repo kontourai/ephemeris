@@ -13,7 +13,7 @@
 > FROZEN notice from 2026-07-02 is superseded.)
 
 **External time actor for the Kontour suite — deadline engine + recurring-schedule core.**
-Status: v0.3 · Layer: time actor.
+Layer: time actor. The current version is in `package.json` and on npm.
 
 > *Ephemeris* (n.) — in surveying/GNSS, a table of time-indexed positions that
 > has an age, goes stale, and must be refreshed. The name carries the
