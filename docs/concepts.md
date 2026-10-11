@@ -45,7 +45,8 @@ a wake-up for each claim deadline, and fire a trigger when the deadline passes.
 
 ```mermaid
 flowchart LR
-  S[Sources] -->|arm / cancel| E[Scheduler]
+  S[Sources] -->|arm / cancel| E["`Ephemeris
+  Scheduler`"]
   E <-->|pending and fired| St[Store]
   C[Clock] --> E
   E -->|fire at deadline| T[Trigger]

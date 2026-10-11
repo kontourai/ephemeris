@@ -173,5 +173,4 @@ Cron fields follow Vixie cron: minute 0-59, hour 0-23, day-of-month 1-31,
 month 1-12, and day-of-week 0-7, where 0 and 7 are both Sunday. Each field is a
 comma-separated list of values, ranges (`a-b`), stepped ranges (`a-b/n` or
 `*/n`), or `*`. Values must be plain decimal integers; month and weekday names
-are not accepted. Unlike Vixie cron, a step on a single value (`5/15`) matches
-only that value.
+are not accepted. A step on a single value (`5/15`) matches only that value.
