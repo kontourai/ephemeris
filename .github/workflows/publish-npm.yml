@@ -62,7 +62,9 @@ jobs:
 
       - name: Verify tagged commit is on main
         run: |
-          git fetch origin main --depth=1
+          # Full fetch: a --depth=1 fetch would make this clone shallow at main's tip,
+          # so any tagged commit behind that tip would look unreachable.
+          git fetch --no-tags origin main
           if ! git merge-base --is-ancestor "${GITHUB_SHA}" FETCH_HEAD; then
             echo "Tagged commit ${GITHUB_SHA} is not reachable from origin/main" >&2
             exit 1
