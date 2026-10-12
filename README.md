@@ -1,5 +1,12 @@
 # Ephemeris
 
+[![npm version](https://img.shields.io/npm/v/%40kontourai%2Fephemeris)](https://www.npmjs.com/package/@kontourai/ephemeris)
+[![CI](https://github.com/kontourai/ephemeris/actions/workflows/ci.yml/badge.svg)](https://github.com/kontourai/ephemeris/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-kontourai.github.io-blue)](https://kontourai.github.io/ephemeris/)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
+[Documentation](https://kontourai.github.io/ephemeris/)
+
 > **Status: re-scoped (2026-08-05)** — Ephemeris is the Kontour suite's
 > general **time actor**, not a Flow-internal module. It owns two schedule
 > axes: the **deadline engine** below (data-derived `expiresAt` / `ttlSeconds`
