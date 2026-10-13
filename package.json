@@ -32,8 +32,8 @@
     "test:node": "node --test tests/node/*.test.mjs",
     "example": "npm run build && node dist/../examples/demo.mjs",
     "prepack": "npm run build",
-    "docs:check": "npx -y github:kontourai/corpus#cc7f6e4939dcc0777c4c3e2d5222b30455013861 corpus check",
-    "docs:build": "npx -y github:kontourai/corpus#cc7f6e4939dcc0777c4c3e2d5222b30455013861 corpus build"
+    "docs:check": "npx -y github:kontourai/corpus#340b66fc8f723c1babe35fce8240c82cd196b0db corpus check",
+    "docs:build": "npx -y github:kontourai/corpus#340b66fc8f723c1babe35fce8240c82cd196b0db corpus build"
   },
   "keywords": [
     "scheduler",
