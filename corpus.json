@@ -1,5 +1,13 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "purpose": "Turn deadlines and recurring schedules into timely triggers without taking trust or process authority.",
+  "builtOn": [
+    {
+      "product": "flow",
+      "via": "@kontourai/flow",
+      "for": "Reevaluate runs when claim deadlines fire."
+    }
+  ],
   "product": "ephemeris",
   "title": "Ephemeris",
   "tagline": "The Kontour time actor: deadline wake-ups that nudge Flow, plus a pure cron/at/every schedule core",
