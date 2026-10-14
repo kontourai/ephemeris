@@ -52,6 +52,7 @@
   },
   "packageManager": "pnpm@11.25.0",
   "devDependencies": {
+    "@kontourai/veritas": "1.11.2",
     "@types/node": "^25.9.2",
     "typescript": "^6.0.3"
   },
